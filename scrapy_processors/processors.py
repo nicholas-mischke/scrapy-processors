@@ -119,33 +119,27 @@ class RemoveHTMLTags(Processor):
 class Demojize(Processor):
     """
     Replace Unicode emoji in a string with emoji shortcodes. Useful for storage.
+    Accepts delimiters, language, version, handle_version as keyword arguments
     """
 
-    def __init__(
-        self,
-        delimiters=None,
-        language=None,
-        version=None,
-        handle_version=None
-    ):
-        args = [delimiters, language, version, handle_version]
-        self.args = tuple(arg for arg in args if arg is not None)
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
 
     def process_value(self, value):
-        return emoji.demojize(value, *self.args)
+        return emoji.demojize(value, **self.kwargs)
 
 
 class RemoveEmojis(Processor):
     """
     Given a string, return a string with all emojis removed.
+    Accepts replace and version as keyword arguments
     """
 
-    def __init__(self, replace='',  version=-1):
-        args = [replace, version]
-        self.args = tuple(arg for arg in args if arg is not None)
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
 
     def process_value(self, value):
-        return emoji.replace_emoji(value, *self.args)
+        return emoji.replace_emoji(value, **self.kwargs)
 
 
 class StringToDateTime(Processor):
