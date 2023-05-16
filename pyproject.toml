@@ -1,16 +1,13 @@
 
 [tool.poetry]
 name = "scrapy-processors"
-version = "1.0.0"
+version = "1.0.1"
 description = "Provides processors for the itemloaders package, commonly used with scrapy."
-authors = ["Nicholas Mischke <inmischkework@proton.me>"]
+authors = ["Nicholas Mischke <nmischkework@proton.me>"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "scrapy_processors"}]
 repository = "https://github.com/nicholas-mischke/scrapy-processors"
-
-[tool.poetry.repositories]
-pypi = "https://pypi.org/scrapy-processors/"
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -28,3 +25,6 @@ pytest-cov = "4.0.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+sources = [
+    {name = "pypi scrapy-processors", url = "https://pypi.org/scrapy-processors/"},
+]
