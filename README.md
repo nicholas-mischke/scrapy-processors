@@ -1,15 +1,21 @@
 
 # Scrapy Processors
 
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+[![Python Versions](https://img.shields.io/badge/Python-3.7%20%7C%203.8%20%7C%203.9%20%7C%203.10%20%7C%203.11-blue)](https://www.python.org/)
+[![codecov](https://codecov.io/gh/nicholas-mischke/scrapy-processors/branch/master/graph/badge.svg?token=YOUR_TOKEN_HERE)](https://codecov.io/gh/nicholas-mischke/scrapy-processors)
+
+
+
 Scrapy Processors is a collection of Processor classes meant to extend the collection provided in the [itemloaders](https://pypi.org/project/itemloaders/) package, commonly used with the [scrapy](https://pypi.org/project/Scrapy/) webscraping framework.
 
 
 https://docs.scrapy.org/en/latest/topics/loaders.html
 
 ## Repositories
-[PyPi]("https://pypi.org/scrapy-processors/")
+[PyPi](https://pypi.org/project/scrapy-processors/)
 
-[GitHub]("https://github.com/nicholas-mischke/scrapy-processors")
+[GitHub](https://github.com/nicholas-mischke/scrapy-processors)
 
 ## Installation
 
@@ -23,13 +29,13 @@ $ pip install scrapy-processors
 
 Here is an overview of the processors available in the package:
 
-- `MapCompose`: A processor that allows for the sequential application of multiple callables to a list of values. 
+- `MapCompose`: A processor that allows you to specify a list of callables that will be applied sequentially to a value, or to each value in a list of values. 
     It supports functions (regular functions, lambda or methods), objects with a `__call__` method or classes that once initialized return an object with a `__call__` method.
     This class inherits from itemloaders.processors.MapCompose and overrides its constructor.
 - `Processor`: A base class for creating custom processors. Subclasses of `Processor` should implement the `process_value` method.
 - `EnsureEncoding`: A processor that converts a string to a specified encoding, defaults to utf-8 & ignores errors.
 - `NormalizeWhitespace`: A processor that normalizes whitespace in a string by 
-    removing zero-width spaces, replacing multiple whitespaces with a single whitespace, removeing leading whitespace in front of punctuation and finally removing leading/trailing whitespaces. 
+    removing zero-width spaces, replacing multiple whitespaces with a single whitespace, removing leading whitespace in front of punctuation and finally removing leading/trailing whitespaces. 
     default punctuation=(',', '.', '!', '?', ';', ':')
 - `PriceParser`: A processor that converts a string representing a price to a `Price` object using the `price_parser` library.
 - `RemoveHTMLTags`: A processor that removes HTML tags from a string using the `BeautifulSoup` library.
@@ -96,13 +102,13 @@ To contribute to this project, please follow these steps:
 2. Clone the forked repository to your local machine using Git:
 
     ```
-    $ git clone https://github.com/your-username/repository.git
+    $ git clone https://github.com/your-username/scrapy-processors.git
     ```
 
 3. Create a new branch for your changes:
 
     ```
-    $ git checkout -b feature/new-feature
+    $ git checkout -b feature
     ```
 
 4. Make your desired changes to the codebase.
@@ -115,10 +121,10 @@ To contribute to this project, please follow these steps:
 6. Push your changes to your forked repository:
 
     ```
-    $ git push origin feature/new-feature
+    $ git push origin feature
     ```
 
-7. Open a pull request (PR) from your forked repository to the original repository's `main` branch.
+7. Open a pull request (PR) from your forked repository to the original repository's `master` branch.
 8. Provide a clear and descriptive title for your PR and explain the changes you have made.
 9. Wait for the project maintainers to review your PR. You may need to make additional changes based on their feedback.
 10. Once your PR is approved, it will be merged into the main codebase. Congratulations on your contribution!
