@@ -1,5 +1,6 @@
 
 import pytest
+import random
 import math
 from datetime import datetime, date, time
 from scrapy_processors.processors import *
@@ -283,6 +284,85 @@ class TestRemoveEmojis:
     ])
     def test_process_value(self, processor, input_value, expected_value):
         assert processor.process_value(input_value) == expected_value
+
+
+class TestStripQuotes:
+
+    quotes = [
+        # UTF-8
+        '\u2018',  # Left Single Quotation Mark ('‘')
+        '\u2019',  # Right Single Quotation Mark ('’')
+        '\u201C',  # Left Double Quotation Mark ('“')
+        '\u201D',  # Right Double Quotation Mark ('”')
+
+        # UTF-16
+        '\u2018',  # Left Single Quotation Mark ('‘')
+        '\u2019',  # Right Single Quotation Mark ('’')
+        '\u201C',  # Left Double Quotation Mark ('“')
+        '\u201D',  # Right Double Quotation Mark ('”')
+
+        # ASCII
+        '\x27',    # Apostrophe ("'")
+        '\x22',    # Quotation Mark ('"')
+
+        # Latin-1 (ISO 8859-1)
+        '\x91',    # Left Single Quotation Mark ('‘')
+        '\x92',    # Right Single Quotation Mark ('’')
+        '\x93',    # Left Double Quotation Mark ('“')
+        '\x94'     # Right Double Quotation Mark ('”')
+    ]
+
+    ticks = [
+        # UTF-8
+        '\u0060',  # Grave Accent ('`')
+        '\u02CB',  # Modifier Letter Grave Accent ('ˋ')
+
+        # UTF-16
+        '\u0060',  # Grave Accent ('`')
+        '\u02CB',  # Modifier Letter Grave Accent ('ˋ')
+
+        # ASCII
+        '\x60',    # Grave Accent ('`')
+
+        # Latin-1 (ISO 8859-1)
+        '\x60'     # Grave Accent ('`')
+    ]
+
+    symbols = quotes + ticks
+
+    def generate_random_symbols(self):
+        length = random.randint(1, len(self.symbols))
+        return ''.join(random.choice(self.symbols) for i in range(length))
+
+    @pytest.fixture
+    def processor(self):
+        return StripQuotes()
+
+    @pytest.mark.parametrize("symbol", symbols)
+    def test_process_value(self, processor, symbol):
+        test_string = symbol + "Test" + symbol + "String" + symbol
+        assert processor.process_value(
+            test_string) == "Test" + symbol + "String"
+
+    def test_remove_all(self, processor):
+        quotes = ''.join(TestStripQuotes.quotes)
+        ticks = ''.join(TestStripQuotes.ticks)
+        all = ticks + quotes + ticks + quotes
+
+        test_string = all + "Test" + all + "String" + all
+
+        assert processor.process_value(test_string) == "Test" + all + "String"
+
+    def test_random(self, processor):
+        """"
+        Just to be sure it can handle any random combination of quotes and ticks
+        """
+        for i in range(100):
+            random_symbols = self.generate_random_symbols()
+            test_string = random_symbols + "Test" + \
+                random_symbols + "String" + random_symbols
+            assert processor.process_value(
+                test_string) == "Test" + random_symbols + "String"
 
 
 class TestStringToDateTime:

@@ -142,6 +142,18 @@ class RemoveEmojis(Processor):
         return emoji.replace_emoji(value, **self.kwargs)
 
 
+class StripQuotes(Processor):
+    """
+    Given a string, return a string with all leading and trailing quotes/tick marks removed.
+    Assumes utf8, utf16, ascii or latin-1 encoding.
+    """
+
+    pattern = r'^[`ˋ‘’“”\'"\u0060\u02CB\x91\x92\x93\x94]+|[`ˋ‘’“”\'"\u0060\u02CB\x91\x92\x93\x94]+$'
+
+    def process_value(self, value):
+        return re.sub(self.pattern, '', value)
+
+
 class StringToDateTime(Processor):
     """
     Given a string representing a date and time, return a datetime object.
