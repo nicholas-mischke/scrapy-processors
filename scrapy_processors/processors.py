@@ -37,8 +37,40 @@ class MapCompose(BuiltInMapCompose):
             elif hasattr(callable, '__call__'):
                 functions.append(callable.__call__)
         self.functions = tuple(functions)
-
-
+    
+    
+    def __add__(self, other):
+        # Must be of of type MapCompose or subclass
+        if not isinstance(other, MapCompose):
+            raise TypeError(
+                f"Unsupported operand type for +: 'MapCompose' and '{type(other).__name__}'"
+            )
+        
+        # default_loader_context must have same key:value pairs 
+        # if the keys are present in both
+        shared_keys = set(self.default_loader_context.keys()) & set(other.default_loader_context.keys())
+        
+        error_msg = ''
+        for key in shared_keys:
+            if self.default_loader_context[key] != other.default_loader_context[key]:
+                error_msg += f"Key: {key}, self[{key}]: {self.default_loader_context[key]}, other[{key}]: {other.default_loader_context[key]}\n"
+        if error_msg:
+            error_msg = (
+                "Cannot add MapCompose objects with mismatched "
+                "key, value pairs in their loader default_loader_context\n"
+            ) + error_msg
+            raise ValueError(error_msg.strip())
+        
+        # Combine default_loader_contexts
+        default_loader_context = self.default_loader_context.copy()
+        default_loader_context.update(other.default_loader_context)
+        
+        # Combine functions
+        functions = self.functions + other.functions
+        
+        return MapCompose(*functions, **default_loader_context)
+        
+        
 class Processor:
 
     def process_value(self, value):

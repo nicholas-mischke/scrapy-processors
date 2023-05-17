@@ -9,45 +9,80 @@ from scrapy_processors.processors import *
 class TestMapCompose:
 
     @pytest.fixture
-    def upper_and_reverse_processor(self):
-        return MapCompose(str.upper, lambda x: x[::-1])
-
-    @pytest.mark.parametrize("input_values, expected_output", [
-        (["hello", "world"], ["OLLEH", "DLROW"]),
-        (["apple", "banana"], ["ELPPA", "ANANAB"]),
-        ([], []),
-    ])
-    def test_process_value(self, upper_and_reverse_processor, input_values, expected_output):
-        output = upper_and_reverse_processor(input_values)
-        assert output == expected_output
+    def reverse_upper_processor(self):
+        return MapCompose(lambda x: x[::-1], str.upper)
 
     @pytest.fixture
-    def many_processor(self):
-        return MapCompose(
-            EnsureEncoding('utf-8'),  # object
-            RemoveEmojis,  # Class
-            NormalizeWhitespace(),
-            str.title,  # function
+    def lower_processor(self):
+        return MapCompose(str.lower)
+
+    @pytest.fixture
+    def clean_processor(self):
+        return MapCompose(str.strip, str.title)
+
+    @pytest.mark.parametrize("input_values, expected_reverse_upper, expected_lower, expected_clean", [
+        (["hello", "world"], 
+         ["OLLEH", "DLROW"], ["hello", "world"], ["Hello", "World"]),
+        (["apPlE", "baNAna"], 
+         ["ELPPA", "ANANAB"], ["apple", "banana"], ["Apple", "Banana"]),
+        (["this is a string", "this is another string"],
+         ["GNIRTS A SI SIHT", "GNIRTS REHTONA SI SIHT"],
+         ["this is a string", "this is another string"],
+         ["This Is A String", "This Is Another String"]),
+    ])
+    def test_process_value(
+        self,
+        reverse_upper_processor,
+        lower_processor,
+        clean_processor,
+        input_values,
+        expected_reverse_upper,
+        expected_lower,
+        expected_clean
+    ):
+        assert reverse_upper_processor(input_values) == expected_reverse_upper
+        assert lower_processor(input_values) == expected_lower
+        assert clean_processor(input_values) == expected_clean
+
+    def test__add__(self):
+        def str_upper(value):
+            return value.upper()
+        
+        def str_reverse(value):
+            return value[::-1]
+        
+        map1 = MapCompose(str_upper, **{'foo': 'bar'})
+        map2 = MapCompose(str_reverse, **{'foo': 'bar'})
+
+        result = map1 + map2
+
+        assert isinstance(result, MapCompose)
+        assert result.functions == (str_upper, str_reverse)
+        assert result.default_loader_context == {'foo': 'bar'}
+
+    def test__add__with_incompatible_operands(self):
+        map1 = MapCompose(lambda x: x.upper(), foo='bar')
+        other = 'some string'
+
+        with pytest.raises(TypeError) as error:
+            result = map1 + other
+
+        assert str(error.value) == (
+            "Unsupported operand type for +: 'MapCompose' and 'str'"
         )
+    
+    def test_add_with_different_loader_context(self):
+        map1 = MapCompose(lambda x: x.upper(), foo='bar')
+        map2 = MapCompose(lambda x: x.lower(), foo='baz')
 
-    @pytest.mark.parametrize("input_values, expected_output", [
-        (["  hello,  world! 😂   "], ["Hello, World!"]),
-        ([], [])
-    ])
-    def test_many_processors(self, many_processor, input_values, expected_output):
-        assert many_processor(input_values) == expected_output
+        with pytest.raises(ValueError) as error:
+            result = map1 + map2
 
-    @pytest.fixture
-    def upper_then_lower_processor(self):
-        return MapCompose(str.upper, str.lower)
-
-    @pytest.mark.parametrize("input_values, expected_output", [
-        (["heLlO", "WorLd"], ["hello", "world"]),
-        (["aPPle", "baNAna"], ["apple", "banana"]),
-        ([], []),
-    ])
-    def test_upper_lower_processor(self, upper_then_lower_processor, input_values, expected_output):
-        assert upper_then_lower_processor(input_values) == expected_output
+        assert str(error.value) == (
+            "Cannot add MapCompose objects with mismatched "
+            "key, value pairs in their loader default_loader_context\n"
+            "Key: foo, self[foo]: bar, other[foo]: baz"
+        )
 
 
 class TestProcessor:
