@@ -3,8 +3,7 @@
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 [![Python Versions](https://img.shields.io/badge/Python-3.7%20%7C%203.8%20%7C%203.9%20%7C%203.10%20%7C%203.11-blue)](https://www.python.org/)
-[![codecov](https://codecov.io/gh/nicholas-mischke/scrapy-processors/branch/master/graph/badge.svg?token=YOUR_TOKEN_HERE)](https://codecov.io/gh/nicholas-mischke/scrapy-processors)
-
+<!-- [![codecov](https://codecov.io/gh/nicholas-mischke/scrapy-processors/branch/master/graph/badge.svg)](https://codecov.io/gh/nicholas-mischke/scrapy-processors) -->
 
 
 Scrapy Processors is a collection of Processor classes meant to extend the collection provided in the [itemloaders](https://pypi.org/project/itemloaders/) package, commonly used with the [scrapy](https://pypi.org/project/Scrapy/) webscraping framework.
@@ -13,7 +12,7 @@ Scrapy Processors is a collection of Processor classes meant to extend the colle
 https://docs.scrapy.org/en/latest/topics/loaders.html
 
 ## Repositories
-[PyPi](https://pypi.org/project/scrapy-processors/)
+[PyPI](https://pypi.org/project/scrapy-processors/)
 
 [GitHub](https://github.com/nicholas-mischke/scrapy-processors)
 
@@ -31,7 +30,7 @@ Here is an overview of the processors available in the package:
 
 - `MapCompose`: A processor that allows you to specify a list of callables that will be applied sequentially to a value, or to each value in a list of values. 
     It supports functions (regular functions, lambda or methods), objects with a `__call__` method or classes that once initialized return an object with a `__call__` method.
-    This class inherits from itemloaders.processors.MapCompose and overrides its constructor.
+    This class inherits from itemloaders.processors.MapCompose and overrides its constructor and defines `__add__`.
 - `Processor`: A base class for creating custom processors. Subclasses of `Processor` should implement the `process_value` method.
 - `EnsureEncoding`: A processor that converts a string to a specified encoding, defaults to utf-8 & ignores errors.
 - `NormalizeWhitespace`: A processor that normalizes whitespace in a string by 
@@ -41,9 +40,10 @@ Here is an overview of the processors available in the package:
 - `RemoveHTMLTags`: A processor that removes HTML tags from a string using the `BeautifulSoup` library.
 - `Demojize`: A processor that replaces Unicode emojis in a string with emoji shortcodes using the `emoji` library.
 - `RemoveEmojis`: A processor that removes emojis from a string using the `emoji` library.
-- `StringToDateTime`: A processor that converts a string representing a date and time to a `datetime` object. default format='%Y-%m-%d, %H:%M:%S'
-- `StringToDate`: A processor that converts a string representing a date to a `date` object. default format='%Y-%m-%d'
-- `StringToTime`: A processor that converts a string representing a time to a `time` object. default format='%H:%M:%S'
+- `StripQuotes`: A processor that removes any number of leading/trailing quotes or tick marks from a string.
+- `StringToDateTime`: A processor that converts a string representing a date and time to a `datetime.datetime` object. default format='%Y-%m-%d, %H:%M:%S'
+- `StringToDate`: A processor that converts a string representing a date to a `datetime.date` object. default format='%Y-%m-%d'
+- `StringToTime`: A processor that converts a string representing a time to a `datetime.time` object. default format='%H:%M:%S'
 - `TakeAll`: A processor that returns all values passed to it. This is a renaming of the built-in `Identity` processor.
 - `TakeAllTruthy`: A processor that returns all truthy values passed to it. It also accepts a default value to return if no values are truthy.
 

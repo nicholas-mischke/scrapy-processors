@@ -37,19 +37,19 @@ class MapCompose(BuiltInMapCompose):
             elif hasattr(callable, '__call__'):
                 functions.append(callable.__call__)
         self.functions = tuple(functions)
-    
-    
+
     def __add__(self, other):
         # Must be of of type MapCompose or subclass
         if not isinstance(other, MapCompose):
             raise TypeError(
                 f"Unsupported operand type for +: 'MapCompose' and '{type(other).__name__}'"
             )
-        
-        # default_loader_context must have same key:value pairs 
+
+        # default_loader_context must have same key:value pairs
         # if the keys are present in both
-        shared_keys = set(self.default_loader_context.keys()) & set(other.default_loader_context.keys())
-        
+        shared_keys = set(self.default_loader_context.keys()) & set(
+            other.default_loader_context.keys())
+
         error_msg = ''
         for key in shared_keys:
             if self.default_loader_context[key] != other.default_loader_context[key]:
@@ -57,20 +57,20 @@ class MapCompose(BuiltInMapCompose):
         if error_msg:
             error_msg = (
                 "Cannot add MapCompose objects with mismatched "
-                "key, value pairs in their loader default_loader_context\n"
+                "key, value pairs in their default_loader_context\n"
             ) + error_msg
             raise ValueError(error_msg.strip())
-        
+
         # Combine default_loader_contexts
         default_loader_context = self.default_loader_context.copy()
         default_loader_context.update(other.default_loader_context)
-        
+
         # Combine functions
         functions = self.functions + other.functions
-        
+
         return MapCompose(*functions, **default_loader_context)
-        
-        
+
+
 class Processor:
 
     def process_value(self, value):
@@ -176,7 +176,7 @@ class RemoveEmojis(Processor):
 
 class StripQuotes(Processor):
     """
-    Given a string, return a string with all leading and trailing quotes/tick marks removed.
+    Given a string, return a string striped of any number of quotes/tick marks.
     Assumes utf8, utf16, ascii or latin-1 encoding.
     """
 
@@ -184,7 +184,7 @@ class StripQuotes(Processor):
 
     def process_value(self, value):
         return re.sub(self.pattern, '', value)
-
+    
 
 class StringToDateTime(Processor):
     """

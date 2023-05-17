@@ -21,10 +21,12 @@ class TestMapCompose:
         return MapCompose(str.strip, str.title)
 
     @pytest.mark.parametrize("input_values, expected_reverse_upper, expected_lower, expected_clean", [
-        (["hello", "world"], 
-         ["OLLEH", "DLROW"], ["hello", "world"], ["Hello", "World"]),
+        (["hello", "world  "], 
+         ["OLLEH", "  DLROW"], ["hello", "world  "], ["Hello", "World"]),
+        
         (["apPlE", "baNAna"], 
          ["ELPPA", "ANANAB"], ["apple", "banana"], ["Apple", "Banana"]),
+        
         (["this is a string", "this is another string"],
          ["GNIRTS A SI SIHT", "GNIRTS REHTONA SI SIHT"],
          ["this is a string", "this is another string"],
@@ -80,7 +82,7 @@ class TestMapCompose:
 
         assert str(error.value) == (
             "Cannot add MapCompose objects with mismatched "
-            "key, value pairs in their loader default_loader_context\n"
+            "key, value pairs in their default_loader_context\n"
             "Key: foo, self[foo]: bar, other[foo]: baz"
         )
 
