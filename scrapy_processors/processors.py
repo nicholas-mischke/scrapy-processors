@@ -2,7 +2,8 @@
 # Standard library imports
 import re
 from datetime import datetime
-from inspect import isclass, isfunction, ismethod
+from builtins import callable as is_callable
+from inspect import isclass, isfunction, ismethod, ismethoddescriptor
 
 # itemloaders imports
 from itemloaders.processors import Identity
@@ -17,28 +18,41 @@ from price_parser import Price
 
 class MapCompose(BuiltInMapCompose):
     """
-    This class overwrites the built-in MapCompose class constructor 
-    to allow for passing of classes, class instances, and callables 
-    to the constructor.
+    This class overwrites the built-in MapCompose class constructor,
+    allowing it to accept any callable, or any class that once instantiated
+    is callable. 
+    
+    Additionally, it defines the __add__ method, allowing MapCompose objects
+    to be added together. The result is a new MapCompose object with the
+    functions and default_loader_contexts of both objects.
     """
 
+    @classmethod
+    def get_callable(cls, arg):
+
+        if (
+            is_callable(arg)
+            and not isclass(arg)  # classes need to be instantiated
+        ):
+            return arg
+
+        if isclass(arg):
+            arg = arg()
+
+        if hasattr(arg, '__call__'):
+            return arg.__call__
+        else:
+            raise TypeError(
+                f"Unsupported callable type: '{type(arg).__name__}'"
+            )
+
     def __init__(self, *callables, **default_loader_context):
+        self.functions = tuple(
+            MapCompose.get_callable(callable) for callable in callables
+        )
         self.default_loader_context = default_loader_context
 
-        functions = []
-        for callable in callables:
-            if (
-                isfunction(callable)
-                or ismethod(callable)
-            ):
-                functions.append(callable)
-            elif isclass(callable):
-                functions.append(callable().__call__)
-            elif hasattr(callable, '__call__'):
-                functions.append(callable.__call__)
-        self.functions = tuple(functions)
-
-    def __add__(self, other):
+    def __add_MapCompose(self, other):
         # Must be of of type MapCompose or subclass
         if not isinstance(other, MapCompose):
             raise TypeError(
@@ -69,6 +83,24 @@ class MapCompose(BuiltInMapCompose):
         functions = self.functions + other.functions
 
         return MapCompose(*functions, **default_loader_context)
+
+    def __add_callable(self, other):
+        try:
+            other = MapCompose.get_callable(other)
+        except TypeError:
+            raise TypeError(
+                f"Unsupported operand type for +: 'MapCompose' and '{type(other).__name__}'"
+            )
+
+        # Combine functions
+        functions = self.functions + (other,)
+
+        return MapCompose(*functions, **self.default_loader_context)
+
+    def __add__(self, other):
+        if isinstance(other, MapCompose):
+            return self.__add_MapCompose(other)
+        return self.__add_callable(other)
 
 
 class Processor:
@@ -184,7 +216,7 @@ class StripQuotes(Processor):
 
     def process_value(self, value):
         return re.sub(self.pattern, '', value)
-    
+
 
 class StringToDateTime(Processor):
     """

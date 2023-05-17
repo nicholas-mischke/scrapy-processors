@@ -6,7 +6,116 @@ from datetime import datetime, date, time
 from scrapy_processors.processors import *
 
 
+# Generic callables
+def str_upper(value):
+    return value.upper()
+
+
+def str_reverse(value):
+    return value[::-1]
+
+
+# Determine if callable is returned by MapCompose.get_callable
+class SomeClass:
+
+    def some_method(self):
+        return None
+
+
+class SomeCallableClass:
+
+    def __call__(self):
+        return None
+
+
+def some_function():
+    return None
+
+
+def some_lambda(x): return x.upper()
+
+
+some_method = SomeClass().some_method
+
+some_callable_obj = SomeCallableClass()
+
+
 class TestMapCompose:
+
+    @pytest.mark.parametrize("input_values, expected_output", [
+        [some_function, some_function],  # function
+        [str.upper, str.upper],  # function
+        [some_lambda, some_lambda],  # lambda
+        [some_method, some_method],  # method
+        [some_callable_obj, some_callable_obj],  # callable class instance
+    ])
+    def test_get_callable(self, input_values, expected_output):
+        assert MapCompose.get_callable(input_values) == expected_output
+
+    def test_get_callable_on_callable_cls(self):
+        assert MapCompose.get_callable(SomeCallableClass).__func__ \
+            == SomeCallableClass.__call__
+
+    @pytest.mark.parametrize("input_values", [
+        [1, 2, 3],  # list
+        SomeClass,  # class
+        SomeClass(),  # class instance
+        'some string',  # string
+    ])
+    def test_get_callable_raises_TypeError(self, input_values):
+        with pytest.raises(TypeError) as error:
+            result = MapCompose.get_callable(input_values)
+
+        assert 'Unsupported callable type' in str(error.value)
+
+    def test_add_MapCompose(self):
+        """
+        Indirectly tests __add_MapCompose method
+        """
+        map1 = MapCompose(str_upper, **{'foo': 'bar'})
+        map2 = MapCompose(str_reverse, **{'foo': 'bar'})
+
+        result = map1 + map2
+
+        assert isinstance(result, MapCompose)
+        assert result.functions == (str_upper, str_reverse)
+        assert result.default_loader_context == {'foo': 'bar'}
+
+    def test_add_callable(self):
+        """
+        Indirectly tests __add_callable method
+        """
+        map1 = MapCompose(str_upper, **{'foo': 'bar'})
+
+        result = map1 + str_reverse
+
+        assert isinstance(result, MapCompose)
+        assert result.functions == (str_upper, str_reverse)
+        assert result.default_loader_context == {'foo': 'bar'}
+
+    def test__add__with_incompatible_operands(self):
+        map1 = MapCompose(lambda x: x.upper(), foo='bar')
+        other = 'some string'
+
+        with pytest.raises(TypeError) as error:
+            result = map1 + other
+
+        assert str(error.value) == (
+            "Unsupported operand type for +: 'MapCompose' and 'str'"
+        )
+
+    def test__add__with_different_loader_context(self):
+        map1 = MapCompose(lambda x: x.upper(), foo='bar')
+        map2 = MapCompose(lambda x: x.lower(), foo='baz')
+
+        with pytest.raises(ValueError) as error:
+            result = map1 + map2
+
+        assert str(error.value) == (
+            "Cannot add MapCompose objects with mismatched "
+            "key, value pairs in their default_loader_context\n"
+            "Key: foo, self[foo]: bar, other[foo]: baz"
+        )
 
     @pytest.fixture
     def reverse_upper_processor(self):
@@ -21,12 +130,12 @@ class TestMapCompose:
         return MapCompose(str.strip, str.title)
 
     @pytest.mark.parametrize("input_values, expected_reverse_upper, expected_lower, expected_clean", [
-        (["hello", "world  "], 
+        (["hello", "world  "],
          ["OLLEH", "  DLROW"], ["hello", "world  "], ["Hello", "World"]),
-        
-        (["apPlE", "baNAna"], 
+
+        (["apPlE", "baNAna"],
          ["ELPPA", "ANANAB"], ["apple", "banana"], ["Apple", "Banana"]),
-        
+
         (["this is a string", "this is another string"],
          ["GNIRTS A SI SIHT", "GNIRTS REHTONA SI SIHT"],
          ["this is a string", "this is another string"],
@@ -45,46 +154,6 @@ class TestMapCompose:
         assert reverse_upper_processor(input_values) == expected_reverse_upper
         assert lower_processor(input_values) == expected_lower
         assert clean_processor(input_values) == expected_clean
-
-    def test__add__(self):
-        def str_upper(value):
-            return value.upper()
-        
-        def str_reverse(value):
-            return value[::-1]
-        
-        map1 = MapCompose(str_upper, **{'foo': 'bar'})
-        map2 = MapCompose(str_reverse, **{'foo': 'bar'})
-
-        result = map1 + map2
-
-        assert isinstance(result, MapCompose)
-        assert result.functions == (str_upper, str_reverse)
-        assert result.default_loader_context == {'foo': 'bar'}
-
-    def test__add__with_incompatible_operands(self):
-        map1 = MapCompose(lambda x: x.upper(), foo='bar')
-        other = 'some string'
-
-        with pytest.raises(TypeError) as error:
-            result = map1 + other
-
-        assert str(error.value) == (
-            "Unsupported operand type for +: 'MapCompose' and 'str'"
-        )
-    
-    def test_add_with_different_loader_context(self):
-        map1 = MapCompose(lambda x: x.upper(), foo='bar')
-        map2 = MapCompose(lambda x: x.lower(), foo='baz')
-
-        with pytest.raises(ValueError) as error:
-            result = map1 + map2
-
-        assert str(error.value) == (
-            "Cannot add MapCompose objects with mismatched "
-            "key, value pairs in their default_loader_context\n"
-            "Key: foo, self[foo]: bar, other[foo]: baz"
-        )
 
 
 class TestProcessor:
