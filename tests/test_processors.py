@@ -1,162 +1,23 @@
 
-import pytest
-import random
+# Standard Imports
 import math
-from datetime import datetime, date, time
+import random
+from datetime import date, datetime, time
+
+# 3rd 🎉 imports
+import pytest
+from itemloaders.utils import get_func_args
+
+# Local Imports
 from scrapy_processors.processors import *
 
 
-# Generic callables
-def str_upper(value):
-    return value.upper()
-
-
-def str_reverse(value):
-    return value[::-1]
-
-
-# Determine if callable is returned by MapCompose.get_callable
-class SomeClass:
-
-    def some_method(self):
-        return None
-
-
-class SomeCallableClass:
-
-    def __call__(self):
-        return None
-
-
-def some_function():
-    return None
-
-
-def some_lambda(x): return x.upper()
-
-
-some_method = SomeClass().some_method
-
-some_callable_obj = SomeCallableClass()
-
-
-class TestMapCompose:
-
-    @pytest.mark.parametrize("input_values, expected_output", [
-        [some_function, some_function],  # function
-        [str.upper, str.upper],  # function
-        [some_lambda, some_lambda],  # lambda
-        [some_method, some_method],  # method
-        [some_callable_obj, some_callable_obj],  # callable class instance
-    ])
-    def test_get_callable(self, input_values, expected_output):
-        assert MapCompose.get_callable(input_values) == expected_output
-
-    def test_get_callable_on_callable_cls(self):
-        assert MapCompose.get_callable(SomeCallableClass).__func__ \
-            == SomeCallableClass.__call__
-
-    @pytest.mark.parametrize("input_values", [
-        [1, 2, 3],  # list
-        SomeClass,  # class
-        SomeClass(),  # class instance
-        'some string',  # string
-    ])
-    def test_get_callable_raises_TypeError(self, input_values):
-        with pytest.raises(TypeError) as error:
-            result = MapCompose.get_callable(input_values)
-
-        assert 'Unsupported callable type' in str(error.value)
-
-    def test_add_MapCompose(self):
-        """
-        Indirectly tests __add_MapCompose method
-        """
-        map1 = MapCompose(str_upper, **{'foo': 'bar'})
-        map2 = MapCompose(str_reverse, **{'foo': 'bar'})
-
-        result = map1 + map2
-
-        assert isinstance(result, MapCompose)
-        assert result.functions == (str_upper, str_reverse)
-        assert result.default_loader_context == {'foo': 'bar'}
-
-    def test_add_callable(self):
-        """
-        Indirectly tests __add_callable method
-        """
-        map1 = MapCompose(str_upper, **{'foo': 'bar'})
-
-        result = map1 + str_reverse
-
-        assert isinstance(result, MapCompose)
-        assert result.functions == (str_upper, str_reverse)
-        assert result.default_loader_context == {'foo': 'bar'}
-
-    def test__add__with_incompatible_operands(self):
-        map1 = MapCompose(lambda x: x.upper(), foo='bar')
-        other = 'some string'
-
-        with pytest.raises(TypeError) as error:
-            result = map1 + other
-
-        assert str(error.value) == (
-            "Unsupported operand type for +: 'MapCompose' and 'str'"
-        )
-
-    def test__add__with_different_loader_context(self):
-        map1 = MapCompose(lambda x: x.upper(), foo='bar')
-        map2 = MapCompose(lambda x: x.lower(), foo='baz')
-
-        with pytest.raises(ValueError) as error:
-            result = map1 + map2
-
-        assert str(error.value) == (
-            "Cannot add MapCompose objects with mismatched "
-            "key, value pairs in their default_loader_context\n"
-            "Key: foo, self[foo]: bar, other[foo]: baz"
-        )
-
-    @pytest.fixture
-    def reverse_upper_processor(self):
-        return MapCompose(lambda x: x[::-1], str.upper)
-
-    @pytest.fixture
-    def lower_processor(self):
-        return MapCompose(str.lower)
-
-    @pytest.fixture
-    def clean_processor(self):
-        return MapCompose(str.strip, str.title)
-
-    @pytest.mark.parametrize("input_values, expected_reverse_upper, expected_lower, expected_clean", [
-        (["hello", "world  "],
-         ["OLLEH", "  DLROW"], ["hello", "world  "], ["Hello", "World"]),
-
-        (["apPlE", "baNAna"],
-         ["ELPPA", "ANANAB"], ["apple", "banana"], ["Apple", "Banana"]),
-
-        (["this is a string", "this is another string"],
-         ["GNIRTS A SI SIHT", "GNIRTS REHTONA SI SIHT"],
-         ["this is a string", "this is another string"],
-         ["This Is A String", "This Is Another String"]),
-    ])
-    def test_process_value(
-        self,
-        reverse_upper_processor,
-        lower_processor,
-        clean_processor,
-        input_values,
-        expected_reverse_upper,
-        expected_lower,
-        expected_clean
-    ):
-        assert reverse_upper_processor(input_values) == expected_reverse_upper
-        assert lower_processor(input_values) == expected_lower
-        assert clean_processor(input_values) == expected_clean
-
-
 class TestProcessor:
+
+    def test_process_value(self):
+        processor = Processor()
+        with pytest.raises(NotImplementedError):
+            processor.process_value('value')
 
     @pytest.fixture
     def processor(self):
@@ -165,11 +26,6 @@ class TestProcessor:
                 return value.upper()
         return ProcessorSubClass()
 
-    def test_process_value(self):
-        processor = Processor()
-        with pytest.raises(NotImplementedError):
-            processor.process_value('value')
-
     @pytest.mark.parametrize("input_values, expected_output", [
         (["hello", "world"], ["HELLO", "WORLD"]),
         (["python", "programming"], ["PYTHON", "PROGRAMMING"]),
@@ -177,6 +33,64 @@ class TestProcessor:
     ])
     def test__call__(self, processor, input_values, expected_output):
         assert processor(input_values) == expected_output
+
+
+class TestContextProcessor:
+
+    def test_process_value(self):
+        processor = ContextProcessor()
+        with pytest.raises(NotImplementedError):
+            processor.process_value('value')
+
+    def test_loader_context_param(self):
+        processor = ContextProcessor()
+        assert 'loader_context' in get_func_args(processor.__call__)
+
+    @pytest.fixture
+    def processor_cls(self):
+        class ContextProcessorSubClass(ContextProcessor):
+            def process_value(self, value, context):
+                if context.get('uppercase') is True:
+                    return value.upper()
+
+                if context.get('lowercase') is True:
+                    return value.lower()
+
+                return value
+
+        return ContextProcessorSubClass
+
+    @pytest.mark.parametrize(
+        ("default_loader_context, loader_context, input_values, expected_output"),
+        [
+            (
+                {}, {},
+                ["heLLo", "World"], ["heLLo", "World"]
+            ),
+            (
+                {'uppercase': True}, {},
+                ["heLLo", "World"], ["HELLO", "WORLD"]
+            ),
+            (
+                {'uppercase': True}, {'uppercase': False},
+                ["heLLo", "World"], ["heLLo", "World"]
+            ),  # Override
+            (
+                {}, {'lowercase': True},
+                ["heLLo", "World"], ["hello", "world"]
+            ),
+        ]
+    )
+    def test__call__(
+        self,
+        processor_cls,
+        default_loader_context,
+        loader_context,
+        input_values,
+        expected_output
+    ):
+        processor = processor_cls(**default_loader_context)
+        assert processor(input_values, loader_context) == expected_output
 
 
 class TestEnsureEncoding:
@@ -236,26 +150,46 @@ class TestNormalizeWhitespace:
         return NormalizeWhitespace()
 
     @pytest.mark.parametrize("input_value, expected_value", [
-        ("Hello, World!", "Hello, World!"),
-        ("   NoWhitespace   ", "NoWhitespace"),
+        # Check two base cases
+        ("", ""),
+        ("Properly Formatted String", "Properly Formatted String"),
+
+        # Step 1: Remove zero-width characters
+        (
+            "\u200bZero\u200b\ufeffWidth\u200b\ufeffWhitespace\ufeff",
+            "ZeroWidthWhitespace"
+        ),
+        ("Zero​Width​Whitespace", "ZeroWidthWhitespace"),
+
+        # Step 2: Replace all whitespace characters with a single whitespace
+        # All other whitespace characters are tested in a separate test
+        ("   Multiple   Whitespaces   Here   ", "Multiple Whitespaces Here"),
+
+        # Step 3: Normalize whitespace around punctuation
+        # using lstrip, rstrip and strip constructor args
+        ("This is a sentence  !", "This is a sentence!"),
+        ("This is also a sentence ??", "This is also a sentence??"),
+
+        ("$ 1,000,000.00", "$1,000,000.00"),
+        ("{ Curly Brackets}", "{Curly Brackets}"),
+
+        ("Sandwitch - The - Hyphens", "Sandwitch-The-Hyphens"),
+        ("nmischkework @ proton.me", "nmischkework@proton.me"),
+
+        # Using UTF-8 left and right double quotation marks
+        ('“ Left & Right UTF-8 Quote Marks ”', '“Left & Right UTF-8 Quote Marks”'),
+
+        # Step 4: Remove leading and trailing whitespace
         (" LeadingWhitespace", "LeadingWhitespace"),
         ("TrailingWhitespace ", "TrailingWhitespace"),
-        ("   Multiple   Whitespace    Here   ", "Multiple Whitespace Here"),
-        ("", ""),
-        ("\t\tTab\t\tSpaces\t\t", "Tab Spaces"),
-        ("\n\nNew\n\nLines\n\n", "New Lines"),
-        ("  Leading  \t\t and \n\n Trailing with Tabs & New Lines  .",
-         "Leading and Trailing with Tabs & New Lines."),
-        #
-        ("\n\t\rHello,  World   ! 😂", "Hello, World! 😂"),
-        ("This is a . sample ! text ? with whitespace ; around : the punctuation marks  ",
-         "This is a. sample! text? with whitespace; around: the punctuation marks"
-         ),
     ])
     def test_with_strings(self, processor, input_value, expected_value):
         assert processor.process_value(input_value) == expected_value
 
     @pytest.mark.parametrize("whitespace", [
+        # This row may have chars that are repeated below
+        '\n', '\t', '\r', '\f', '\v', ' ',
+
         # UTF-8 Whitespace Characters
         " ",        # Space
         "\u00A0",   # No-Break Space
@@ -312,6 +246,96 @@ class TestNormalizeWhitespace:
     def test_whitespace_characters(self, processor, whitespace):
         input_value = f"Test  {whitespace}  String"
         assert processor.process_value(input_value) == "Test String"
+
+
+class TestCharWhitespacePadding:
+
+    @pytest.fixture
+    def math_formula_processor(self):
+        return CharWhitespacePadding(
+            chars=("=", "+", "-", "*", "<", ">"),
+            lpad=1,
+            rpad=1
+        )
+
+    @pytest.mark.parametrize("input_value, expected_value", [
+        # Expected values are the same as the input values
+        ("", ""),
+        ("1 + 1 = 2", "1 + 1 = 2"),
+        # Starts with no whitespace
+        ("1+1=2", "1 + 1 = 2"),
+        # Has way too much whitespace
+        ("1   +  1  =  2", "1 + 1 = 2"),
+        # Couple more for fun, using different chars
+        ("1*1=1", "1 * 1 = 1"),
+        ("1+1>0", "1 + 1 > 0"),
+        ("1+1<3", "1 + 1 < 3"),
+    ])
+    def test_with_strings(self, math_formula_processor, input_value, expected_value):
+        assert math_formula_processor.process_value(
+            input_value) == expected_value
+
+
+class TestNormalizeNumericString:
+
+    # thousands_sep: comma, period, space or empty string
+    # decimal_sep: comma or period
+    # Test all combinations where they're not the same separator
+    @pytest.mark.parametrize("processor_kwargs, input_value, expected_value", [
+        (
+            {"thousands_sep": ",", "decimal_sep": "."},
+            "1000000.75", "1,000,000.75"
+        ),
+        (
+            {"thousands_sep": ".", "decimal_sep": ","},
+            "1000000.75", "1.000.000,75"
+        ),
+        (
+            {"thousands_sep": " ", "decimal_sep": "."},
+            "1000000.75", "1 000 000.75"
+        ),
+        (
+            {"thousands_sep": " ", "decimal_sep": ","},
+            "1000000.75", "1 000 000,75"
+        ),
+        (
+            {"thousands_sep": "", "decimal_sep": "."},
+            "1000000.75", "1000000.75"
+        ),
+        (
+            {"thousands_sep": "", "decimal_sep": ","},
+            "1000000.75", "1000000,75"
+        ),
+    ])
+    def test_seperators(self, processor_kwargs, input_value, expected_value):
+        processor = NormalizeNumericString(**processor_kwargs)
+        assert processor.process_value(input_value) == expected_value
+
+    @pytest.mark.parametrize("processor_kwargs, input_value, expected_value", [
+        ({'decimal_places': 0}, "1000.75", "1001"),
+        ({'decimal_places': 1}, "1000.75", "1000.8"),
+        ({'decimal_places': 2}, "1000.75", "1000.75"),
+        ({'decimal_places': 3}, "1000.75", "1000.75"),
+    ])
+    def test_rounding(self, processor_kwargs, input_value, expected_value):
+        processor = NormalizeNumericString(**processor_kwargs)
+        assert processor.process_value(input_value) == expected_value
+
+    @pytest.mark.parametrize("processor_kwargs, input_value, expected_value", [
+        (
+            {'keep_trailing_zeros': False},
+            "1,000.000",
+            "1000"
+        ),
+        (
+            {'keep_trailing_zeros': True},
+            "1,000.000",
+            "1000.00"  # Rounded to 2 decimal places
+        ),
+    ])
+    def test_keep_trailing_zeros(self, processor_kwargs, input_value, expected_value):
+        processor = NormalizeNumericString(**processor_kwargs)
+        assert processor.process_value(input_value) == expected_value
 
 
 class TestPriceParser:
@@ -394,14 +418,21 @@ class TestRemoveEmojis:
 
 class TestStripQuotes:
 
-    quotes = [
-        # UTF-8
-        '\u2018',  # Left Single Quotation Mark ('‘')
-        '\u2019',  # Right Single Quotation Mark ('’')
-        '\u201C',  # Left Double Quotation Mark ('“')
-        '\u201D',  # Right Double Quotation Mark ('”')
+    @pytest.fixture
+    def processor(self):
+        return StripQuotes()
 
-        # UTF-16
+    @pytest.mark.parametrize("input_value, expected_value", [
+        ("'Single quotes'", "Single quotes"),
+        ('"Double quotes"', "Double quotes"),
+        ("“There are only two ways to live your life. One is as though nothing is a miracle. The other is as though everything is a miracle.”",
+         "There are only two ways to live your life. One is as though nothing is a miracle. The other is as though everything is a miracle."),
+    ])
+    def test_process_value_with_strings(self, processor, input_value, expected_value):
+        assert processor.process_value(input_value) == expected_value
+
+    quotes = [
+        # UTF-8 & UTF-16
         '\u2018',  # Left Single Quotation Mark ('‘')
         '\u2019',  # Right Single Quotation Mark ('’')
         '\u201C',  # Left Double Quotation Mark ('“')
@@ -439,10 +470,6 @@ class TestStripQuotes:
     def generate_random_symbols(self):
         length = random.randint(1, len(self.symbols))
         return ''.join(random.choice(self.symbols) for i in range(length))
-
-    @pytest.fixture
-    def processor(self):
-        return StripQuotes()
 
     @pytest.mark.parametrize("symbol", symbols)
     def test_process_value(self, processor, symbol):
