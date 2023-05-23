@@ -1,5 +1,9 @@
 
 import pytest
+
+from collections import ChainMap
+
+
 from scrapy_processors.utils import *
 
 # Generic callables
@@ -89,3 +93,16 @@ def test_context_to_kwargs():
         ...
     kwargs = context_to_kwargs(context, my_func)
     assert kwargs == {}
+
+
+def test_unpack_context():
+    
+    context = {'a': 1, 'b': 2, 'c': 3}
+    assert unpack_context(context) == (1, 2, 3)
+    
+    chain1 = {'a': 1}
+    chain2 = {'b': 2}
+    chain3 = {'a': 7, 'b': 300, 'c': 3}
+
+    chain_map = ChainMap(chain1, chain2, chain3)
+    assert unpack_context(chain_map) == (1, 2, 3)[:3]

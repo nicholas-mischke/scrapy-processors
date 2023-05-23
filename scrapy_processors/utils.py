@@ -2,6 +2,8 @@
 from inspect import isclass
 from typing import Any, Callable, Dict, Type, Union
 
+import math
+
 from itemloaders.utils import get_func_args
 
 
@@ -70,6 +72,12 @@ def merge_context_dicts(dict1: Dict[str, Any], dict2: Dict[str, Any]) -> Dict[st
 
     return merged_context
 
+
+def unpack_context(context, num_args: int = None) -> tuple:
+    values = tuple(context.values())
+    if num_args is not None:
+        return values[:num_args]
+    return values
 
 def context_to_kwargs(context: Dict[str, Any], callable: Callable) -> Dict[str, Any]:
     """

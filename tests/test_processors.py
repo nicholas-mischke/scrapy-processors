@@ -12,6 +12,74 @@ from itemloaders.utils import get_func_args
 from scrapy_processors.processors import *
 
 
+class TestProcessorMeta:
+
+    @pytest.fixture
+    def processor_cls(self):
+
+        class CustomProcessor(Processor):
+
+            field_1 = None
+            field_2 = None
+            field_3 = None
+
+            def process_value(self, value):
+                return value
+
+        return CustomProcessor
+
+    @pytest.mark.parametrize(
+        "args, kwargs, instance_context",
+        [
+            # Call with no args and no kwargs
+            (
+                tuple(),
+                {},
+                {'field_1': None, 'field_2': None, 'field_3': None}
+            ),
+
+            # Call with args and no kwargs
+            (
+                (1, 2, 3),
+                {},
+                {'field_1': 1, 'field_2': 2, 'field_3': 3}
+            ),
+
+            # Call with no args and kwargs
+            (
+                tuple(),
+                {'field_1': 3, 'field_2': 4, 'field_3': 5},
+                {'field_1': 3, 'field_2': 4, 'field_3': 5}
+            ),
+            
+            # Call with some args and some kwargs
+            (
+                (1, 2),
+                {'field_3': 5},
+                {'field_1': 1, 'field_2': 2, 'field_3': 5}
+            )
+        ]
+    )
+    def test_processor_constructor(self, processor_cls, args, kwargs, instance_context):
+        assert processor_cls(
+            *args, **kwargs).default_loader_context == instance_context
+
+    @pytest.mark.parametrize(
+        "args, kwargs",
+        [
+            # Too many positional args
+            ((1, 2, 3, 4), {}),
+            # Too many keyword args
+            (tuple(), {'field_1': 1, 'field_2': 2, 'field_3': 3, 'field_4': 4}),
+            # got multiple values for keyword argument 'field_1'
+            ((7, ), {'field_1': 1, 'field_1': 2}),
+        ]
+    )
+    def test_raises_TypeError(self, processor_cls, args, kwargs):
+        with pytest.raises(TypeError) as error:
+            processor_cls(*args, **kwargs)
+
+
 class TestProcessor:
 
     def test_process_value(self):
@@ -41,6 +109,10 @@ class TestProcessor:
     @pytest.fixture
     def processor_cls(self):
         class ProcessorSubClass(Processor):
+
+            uppercase = False
+            lowercase = False
+
             def process_value(self, value, context):
                 if context.get('uppercase') is True:
                     return value.upper()
@@ -48,16 +120,20 @@ class TestProcessor:
                 if context.get('lowercase') is True:
                     return value.lower()
 
-                return value
+                # Not an arg in default_loader_context
+                # passed from ItemLoader as loader_context
+                if context.get('titlecase') is True:
+                    return value.title()
 
+                return value
         return ProcessorSubClass
 
     @pytest.mark.parametrize(
-        ("default_loader_context, loader_context, input_values, expected_output"),
+        "constructor_kwargs, loader_context, input_values, expected_output",
         [
             (
                 {}, {},
-                ["heLLo", "World"], ["heLLo", "World"]
+                ["heLLo", "World"], ["heLLo", "World"]  # No change
             ),
             (
                 {'uppercase': True}, {},
@@ -65,23 +141,29 @@ class TestProcessor:
             ),
             (
                 {'uppercase': True}, {'uppercase': False},
+                # loader_context overrides
                 ["heLLo", "World"], ["heLLo", "World"]
             ),  # Override
             (
                 {}, {'lowercase': True},
                 ["heLLo", "World"], ["hello", "world"]
             ),
+            (
+                {}, {'titlecase': True},
+                # Not an arg in default_loader_context
+                ["heLLo", "World"], ["Hello", "World"]
+            )
         ]
     )
     def test__call__(
         self,
         processor_cls,
-        default_loader_context,
+        constructor_kwargs,
         loader_context,
         input_values,
         expected_output
     ):
-        processor = processor_cls(**default_loader_context)
+        processor = processor_cls(**constructor_kwargs)
         assert processor(input_values, loader_context) == expected_output
 
 
@@ -296,32 +378,32 @@ class TestCharWhitespacePadding:
 
 class TestNormalizeNumericString:
 
-    # thousands_sep: comma, period, space or empty string
-    # decimal_sep: comma or period
+    # thousands_separator: comma, period, space or empty string
+    # decimal_separator: comma or period
     # Test all combinations where they're not the same separator
     @pytest.mark.parametrize("processor_kwargs, input_value, expected_value", [
         (
-            {"thousands_sep": ",", "decimal_sep": "."},
+            {"thousands_separator": ",", "decimal_separator": "."},
             "1000000.75", "1,000,000.75"
         ),
         (
-            {"thousands_sep": ".", "decimal_sep": ","},
+            {"thousands_separator": ".", "decimal_separator": ","},
             "1000000.75", "1.000.000,75"
         ),
         (
-            {"thousands_sep": " ", "decimal_sep": "."},
+            {"thousands_separator": " ", "decimal_separator": "."},
             "1000000.75", "1 000 000.75"
         ),
         (
-            {"thousands_sep": " ", "decimal_sep": ","},
+            {"thousands_separator": " ", "decimal_separator": ","},
             "1000000.75", "1 000 000,75"
         ),
         (
-            {"thousands_sep": "", "decimal_sep": "."},
+            {"thousands_separator": "", "decimal_separator": "."},
             "1000000.75", "1000000.75"
         ),
         (
-            {"thousands_sep": "", "decimal_sep": ","},
+            {"thousands_separator": "", "decimal_separator": ","},
             "1000000.75", "1000000,75"
         ),
     ])
@@ -370,22 +452,22 @@ class TestPriceParser:
         return PriceParser()
 
     @pytest.mark.parametrize(
-        "input_value, expected_amount, expected_currency",
+        "input_value, context, expected_amount, expected_currency",
         [
-            ("USD 100.00", 100.00, "USD"),      # United States Dollars
-            ("EUR 50.99", 50.99, "EUR"),        # Euros
-            ("£75.50", 75.50, "£"),           # British Pound Sterling
-            ("$250,000.00", 250000.00, "$"),  # United States Dollars
-            ("€22,90", 22.90, "€"),           # Euros
-            ("¥1,500.50", 1500.50, "¥"),      # Japanese Yen
+            ("USD 100.00", {}, 100.00, "USD"),      # United States Dollars
+            ("EUR 50.99", {}, 50.99, "EUR"),        # Euros
+            ("£75.50", {}, 75.50, "£"),           # British Pound Sterling
+            ("$250,000.00", {}, 250000.00, "$"),  # United States Dollars
+            ("€22,90", {'decimal_separator': ','}, 22.90, "€"),           # Euros
+            ("¥1,500.50", {}, 1500.50, "¥"),      # Japanese Yen
         ],
     )
     def test_process_value(
         self, processor,
-        input_value, expected_amount, expected_currency
+        input_value, context, expected_amount, expected_currency
     ):
         # Process the value
-        price = processor(input_value)[0]
+        price = processor(input_value, context)[0]
 
         # Assert the attributes of the Price object
         assert math.isclose(price.amount, expected_amount, rel_tol=1e-9)

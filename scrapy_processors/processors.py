@@ -1,6 +1,9 @@
 
 # Standard library imports
 import re
+from copy import deepcopy
+import inspect
+from inspect import Parameter, Signature
 from collections import ChainMap
 from datetime import datetime, date, time
 from typing import Any, Callable, Dict, Iterable, Optional, List, Set, Tuple, TypeVar, Union
@@ -12,13 +15,61 @@ from price_parser import Price
 
 # itemloaders imports
 from itemloaders.utils import arg_to_iter, get_func_args
-from scrapy_processors.utils import context_to_kwargs
+from scrapy_processors.utils import context_to_kwargs, unpack_context
 
+from pprint import pprint
 
 T = TypeVar('T')  # Input type
 
 
-class Processor:
+class ProcessorMeta(type):
+    """
+    Metaclass for Processor classes.
+
+    This metaclass automatically collects class variables into the default_loader_context
+
+    When the class is initialized, the default_loader_context is merged with the
+    positional and keyword arguments passed to the class constructor.
+    """
+
+    def __new__(mcs, name, bases, attrs):
+        # Automatically collect class variables into default_loader_context
+        attrs["default_loader_context"] = {
+            key: value
+            for key, value in attrs.items()
+            if not key.startswith("__") and not callable(value)
+        }
+        return super().__new__(mcs, name, bases, attrs)
+
+    def __call__(cls, *args, **kwargs):
+
+        default_loader_context = deepcopy(cls.default_loader_context)
+        parameter_names = list(default_loader_context.keys())
+
+        # To check for TypeErrors, dynamically create a function signature
+        # Example:
+        #  Classname() takes 3 positional arguments but 4 were given
+        #  Classname() got multiple values for argument 'arg'
+        params = [
+            Parameter(
+                name, 
+                Parameter.POSITIONAL_OR_KEYWORD,
+                default=default_loader_context[name]
+            ) for name in parameter_names
+        ]
+        signature = Signature(params)
+        bound_args = signature.bind(*args, **kwargs).arguments
+        
+        # Update the default_loader_context with the bound arguments
+        default_loader_context.update(bound_args)
+        
+        # Create the new instance
+        instance = super().__call__()
+        instance.default_loader_context = default_loader_context
+        return instance
+
+
+class Processor(metaclass=ProcessorMeta):
     """
     A Processor class that uses an optional context to process values.
 
@@ -56,17 +107,14 @@ class Processor:
     ```
     """
 
-    def __init__(self, **default_loader_context: Dict[str, Any]):
-        self.default_loader_context = default_loader_context
-
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> Any:
         """
         If calling directoy, default_loader_context isn't used. 
-        
+
         Process a single value using an optional context.
 
         This method must be overridden by subclasses.
@@ -75,13 +123,16 @@ class Processor:
         :param context: The optional context to use when processing the value.
         :return: The processed value.
         """
-        raise NotImplementedError()
+        raise NotImplementedError(
+            f"{self.__class__.__name__} has not implemented the `process_value` method. "
+            "This method should be overridden in all subclasses to provide the processing logic."
+        )
 
-    # The `loader_context` parameter cannot be renamed. 
-    # It is used by the itemloaders package. 
+    # The `loader_context` parameter cannot be renamed.
+    # It is used by the itemloaders package.
     def __call__(
-        self, 
-        values: Union[T, Iterable[T]], 
+        self,
+        values: Union[T, Iterable[T]],
         loader_context: Optional[Dict[str, Any]] = None
     ) -> List[Any]:
         """
@@ -134,31 +185,22 @@ class EnsureEncoding(Processor):
         str: The input string encoded with the desired encoding.
     """
 
-    def __init__(
-        self, 
-        encoding: str = 'utf-8', 
-        encoding_errors: str = 'ignore',
-        decoding_errors: str = 'strict'
-    ):
-        self.default_loader_context = {
-            'encoding': encoding, 
-            'encoding_errors': encoding_errors,
-            'decoding_errors': decoding_errors
-        }
-        
+    encoding: str = 'utf-8'
+    encoding_errors: str = 'ignore'
+    decoding_errors: str = 'strict'
+
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> str:
-        encoding = context['encoding']
-        encoding_errors = context['encoding_errors']
-        decoding_errors = context['decoding_errors']
-        
+
+        encoding, encoding_errors, decoding_errors = unpack_context(context, 3)
+
         incoming_string = str(value)
         bytes = incoming_string.encode(encoding, encoding_errors)
         outgoing_string = bytes.decode(encoding, decoding_errors)
-        
+
         return outgoing_string
 
 
@@ -204,21 +246,7 @@ class NormalizeWhitespace(Processor):
     Assumes utf8, utf16, ascii or latin-1 encoding.
     """
 
-    # The class variables below are here more for readability than anything else
-    # The default values used in the __init__ method are the same as the class variables
-    # Just rewritten as tuples and flattened.
-    punctuation_marks_no_space = [
-        # Punctuation Characters That Typically Don't Have Whitespace Around Them
-        '-',  # Hyphen-minus
-        '/',  # Slash
-        '_',  # Underscore
-        '@',  # At sign
-        '\\',  # Backslash
-        '^',  # Circumflex accent
-        '~',  # Tilde
-    ]
-
-    punctuation_marks_no_left_space = [
+    lstrip_chars: Set[str] = {
         # Punctuation Characters That Typically Don't Have Whitespace to Their Left
         '.',  # Period/Full stop
         ',',  # Comma
@@ -232,11 +260,10 @@ class NormalizeWhitespace(Processor):
         '%',  # Percent sign
         '\u2019',  # Right Single Quotation Mark ('’')
         '\u201D',  # Right Double Quotation Mark ('”')
-        '\x92',    # Right Single Quotation Mark ('’')
-        '\x94'     # Right Double Quotation Mark ('”')
-    ]
-
-    punctuation_marks_no_right_space = [
+        '\x92',    # latin-1 Right Single Quotation Mark ('’')
+        '\x94'     # latin-1 Right Double Quotation Mark ('”')
+    }
+    rstrip_chars: Set[str] = {
         # Punctuation Characters That Typically Don't Have Whitespace to Their Right
         '(',  # Left parenthesis
         '$',  # Dollar sign
@@ -245,11 +272,20 @@ class NormalizeWhitespace(Processor):
         '#',  # Hash/Pound sign
         '\u2018',  # Left Single Quotation Mark ('‘')
         '\u201C',  # Left Double Quotation Mark ('“')
-        '\x91',    # Left Single Quotation Mark ('‘')
-        '\x93',    # Left Double Quotation Mark ('“')
-    ]
-
-    other_punctuation = [
+        '\x91',    # latin-1 Left Single Quotation Mark ('‘')
+        '\x93',    # latin-1 Left Double Quotation Mark ('“')
+    }
+    strip_chars: Set[str] = {
+        # Punctuation Characters That Typically Don't Have Whitespace Around Them
+        '-',  # Hyphen-minus
+        '/',  # Slash
+        '_',  # Underscore
+        '@',  # At sign
+        '\\',  # Backslash
+        '^',  # Circumflex accent
+        '~',  # Tilde
+    }
+    other_chars: Set[str] = {
         '*',  # Asterisk
         '&',  # Ampersand
         '|',  # Vertical bar
@@ -263,31 +299,11 @@ class NormalizeWhitespace(Processor):
         '+',  # Plus sign
         '<',  # Less than sign
         '>',  # Greater than sign
-    ]
-
-    # Utf-8 quotation marks
-    # '\u2019', '\u201D', '\u2018', '\u201C',
-    # Latin-1 quotation marks
-    # '\x92', '\x94', '\x91', '\x93'
-    def __init__(
-        self,
-        lstrip_chars: Set[str] = {
-            '.', ',', '!', '?', ')', ']', '}', ':', ';', '%', '\u2019', '\u201D', '\x92', '\x94'
-        },
-        rstrip_chars: Set[str] = {
-            '(', '$', '[', '{', '#', '\u2018', '\u201C', '\x91', '\x93'
-        },
-        strip_chars: Set[str] = {'-', '/', '_', '@', '\\', '^', '~'}
-    ):
-        self.default_loader_context = {
-            'lstrip_chars': lstrip_chars,
-            'rstrip_chars': rstrip_chars,
-            'strip_chars': strip_chars
-        }
+    }
 
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> str:
         # Step 1) Remove zero-width spaces
@@ -304,7 +320,7 @@ class NormalizeWhitespace(Processor):
         lstrip_add = context.get('lstrip_add', set())
         lstrip_ignore = context.get('lstrip_ignore', set())
         lstrip = lstrip.union(lstrip_add).difference(lstrip_ignore)
-        
+
         lstrip = re.escape(''.join(lstrip))
         lstrip_pattern = r'\s*(?=[' + lstrip + r'])'
         value = re.sub(lstrip_pattern, '', value)
@@ -315,7 +331,7 @@ class NormalizeWhitespace(Processor):
         rstrip_add = context.get('rstrip_add', set())
         rstrip_ignore = context.get('rstrip_ignore', set())
         rstrip = rstrip.union(rstrip_add).difference(rstrip_ignore)
-        
+
         rstrip = re.escape(''.join(rstrip))
         rstrip_pattern = r'(?<=[' + rstrip + r'])\s*'
         value = re.sub(rstrip_pattern, '', value)
@@ -326,7 +342,7 @@ class NormalizeWhitespace(Processor):
         strip_add = context.get('strip_add', set())
         strip_ignore = context.get('strip_ignore', set())
         strip = strip.union(strip_add).difference(strip_ignore)
-        
+
         strip = re.escape(''.join(strip))
         strip_pattern = r'\s*([' + strip + r'])\s*'
         value = re.sub(strip_pattern, r'\1', value)
@@ -371,21 +387,18 @@ class CharWhitespacePadding(Processor):
         print(result) # Output: ['7 * 3 = 21', '7 - 3 = 4']
     """
 
-    def __init__(self, chars: Union[str, Tuple[str, ...]], lpad: int = 1, rpad: int = 1):
-        self.default_loader_context = {
-            'chars': arg_to_iter(chars),
-            'lpad': lpad,
-            'rpad': rpad
-        }
-        
+    chars: Union[str, Tuple[str, ...]] = tuple()
+    lpad: int = 1
+    rpad: int = 1
+
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> str:
-        
-        chars, lpad, rpad = context['chars'], context['lpad'], context['rpad']
-        
+
+        chars, lpad, rpad = unpack_context(context)
+
         pattern = "[" + re.escape("".join(chars)) + "]"
         return re.sub(
             r'\s*' + pattern + r'\s*', lambda match: ' ' *
@@ -440,37 +453,21 @@ class NormalizeNumericString(Processor):
         print(result) # Output: ['1000000', '3', '101']
     """
 
-    def __init__(
-        self,
-        thousands_sep: str = '',
-        decimal_sep: str = '.',
-        decimal_places: int = 2,
-        keep_trailing_zeros: bool = False,
-        input_value_decimal_sep: str = '.'
-    ):
-        self.default_loader_context = {
-            'thousands_sep': thousands_sep,
-            'decimal_sep': decimal_sep,
-            'decimal_places': decimal_places,
-            'keep_trailing_zeros': keep_trailing_zeros,
-            'input_value_decimal_sep': input_value_decimal_sep
-        }
+    thousands_separator: str = ''
+    decimal_separator: str = '.'
+    decimal_places: int = 2
+    keep_trailing_zeros: bool = False
+
+    input_decimal_separator: str = '.'
 
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> str:
-        """
-        The curr_thousands_sep and curr_decimal_sep arguments are used to determine
-        Need to be supplied so the string can be seperated into it's integer and decimal parts.
-        """
-        thousands_sep = context['thousands_sep']
-        decimal_sep = context['decimal_sep']
-        decimal_places = context['decimal_places']
-        keep_trailing_zeros = context['keep_trailing_zeros']
-        input_value_decimal_sep = context['input_value_decimal_sep']
-        
+        thousands_separator, decimal_separator, decimal_places, keep_trailing_zeros, \
+            input_decimal_separator = unpack_context(context)
+
         # The price_parser.Price object is good at detecting various number formats.
         # 1 000 000,00
         # 1,000,000.00
@@ -478,7 +475,7 @@ class NormalizeNumericString(Processor):
         # so no custom logic needs to be implemented to turn string into number.
         num = Price.fromstring(
             value,
-            decimal_separator=input_value_decimal_sep
+            decimal_separator=input_decimal_separator
         ).amount_float
 
         # The f-string won't take all possible formats for thousands_sep and decimal_sep
@@ -497,12 +494,12 @@ class NormalizeNumericString(Processor):
         num = num.replace('.', 'DECIMAL_SEP')
 
         # Now to replace the temporary values with the user supplied values
-        num = num.replace('THOUSANDS_SEP', thousands_sep)
-        num = num.replace('DECIMAL_SEP', decimal_sep)
+        num = num.replace('THOUSANDS_SEP', thousands_separator)
+        num = num.replace('DECIMAL_SEP', decimal_separator)
 
         if keep_trailing_zeros is False:
             # Return integer if no non-zero decimal places
-            num = num.rstrip('0').rstrip(decimal_sep)
+            num = num.rstrip('0').rstrip(decimal_separator)
 
         return num
 
@@ -534,23 +531,16 @@ class PriceParser(Processor):
         for price in result:
             print(price.amount, price.currency)  # Output: 19.99 $, 9.99 €, 49.99 £
     """
-    
-    def __init__(
-        self, 
-        currency_hint: Optional[str] = None,
-        decimal_sep: Optional[str] = None
-    ):
-        self.default_loader_context = {
-            'currency_hint': currency_hint,
-            'decimal_separator': decimal_sep
-        }
+
+    currency_hint: Optional[str] = 'USD'
+    decimal_separator: Optional[str] = '.'
 
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> Price:
-        
+
         kwargs = context_to_kwargs(context, Price.fromstring)
         return Price.fromstring(value, **kwargs)
 
@@ -618,25 +608,17 @@ class Demojize(Processor):
         print(result)  # Output: [':face_with_tears_of_joy:', ':smiling_face_with_hearts:', ':thumbs_up:']
     """
 
-    def __init__(self,         
-        delimiters: Tuple[str, str] = (':', ':'),
-        language: str = 'en',
-        version: Optional[Union[str, int]] = None,
-        handle_version: Optional[Union[str, Callable[[str, dict], str]]] = None
-    ):
-        self.default_loader_context = {
-            'delimiters': delimiters,
-            'language': language,
-            'version': version,
-            'handle_version': handle_version
-        }
-        
+    delimiters: Tuple[str, str] = (':', ':')
+    language: str = 'en'
+    version: Optional[Union[str, int]] = None
+    handle_version: Optional[Union[str, Callable[[str, dict], str]]] = None
+
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> str:
-        
+
         kwargs = context_to_kwargs(context, emoji.demojize)
         return emoji.demojize(value, **kwargs)
 
@@ -667,22 +649,15 @@ class RemoveEmojis(Processor):
         print(result)  # Output: ['', 'I love you! ', '']
     """
 
-    def __init__(
-        self, 
-        replace: Union[str, Callable[[str, dict], str]] = '', 
-        version: int = -1
-    ):
-        self.default_loader_context = {
-            'replace': replace,
-            'version': version
-        }
+    replace: Union[str, Callable[[str, dict], str]] = ''
+    version: int = -1
 
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> str:
-        
+
         kwargs = context_to_kwargs(context, emoji.replace_emoji)
         return emoji.replace_emoji(value, **kwargs)
 
@@ -710,10 +685,15 @@ class StripQuotes(Processor):
         print(result)  # Output: ['😂', '🥰', '👍']
     """
 
-    pattern = r'^[`ˋ‘’“”\'"\u0060\u02CB\x91\x92\x93\x94]+|[`ˋ‘’“”\'"\u0060\u02CB\x91\x92\x93\x94]+$'
-
     def process_value(self, value: str) -> str:
-        return re.sub(self.pattern, '', value)
+        return re.sub(
+            r'^[`ˋ‘’“”\'"'
+            r'\u0060\u02CB\x91\x92\x93\x94]+'
+            r'|[`ˋ‘’“”\'"'
+            r'\u0060\u02CB\x91\x92\x93\x94]+$',
+            '',
+            value
+        )
 
 
 class StringToDateTime(Processor):
@@ -742,14 +722,11 @@ class StringToDateTime(Processor):
         print(result)  # Output: [datetime.datetime(2023, 5, 22, 12, 30), datetime.datetime(2023, 5, 23, 13, 45)]
     """
 
-    def __init__(self, format: str = '%Y-%m-%d, %H:%M:%S'):
-        self.default_loader_context = {
-            'format': format
-        }
+    format: str = '%Y-%m-%d, %H:%M:%S'
 
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> datetime:
         return datetime.strptime(value, context['format'])
@@ -781,14 +758,11 @@ class StringToDate(Processor):
         print(result)  # Output: [datetime.date(2023, 5, 22), datetime.date(2023, 5, 23)]
     """
 
-    def __init__(self, format: str = '%Y-%m-%d'):
-        self.default_loader_context = {
-            'format': format
-        }
+    format: str = '%Y-%m-%d'
 
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> date:
         return datetime.strptime(value, context['format']).date()
@@ -821,14 +795,11 @@ class StringToTime(Processor):
         print(result)  # Output: [datetime.time(14, 35), datetime.time(18, 40)]
     """
 
-    def __init__(self, format: str = '%H:%M:%S'):
-        self.default_loader_context = {
-            'format': format
-        }
+    format: str = '%H:%M:%S'
 
     def process_value(
-        self, 
-        value: T, 
+        self,
+        value: T,
         context: Optional[Dict[str, Any]] = None
     ) -> time:
         return datetime.strptime(value, context['format']).time()
@@ -861,9 +832,19 @@ class TakeAllTruthy(Processor):
         print(result)  # Output: [1, 2, 3] (default value is used)
     """
 
-    def __init__(self, default=None):
-        self.default = default
+    default = None
 
-    def __call__(self, values: Union[T, Iterable[T]]) -> List[Any]:
+    def __call__(
+        self,
+        values: Union[T, Iterable[T]],
+        loader_context: Optional[Dict[str, Any]] = None
+    ) -> List[Any]:
+
         values = arg_to_iter(values)
-        return [value for value in values if value] or self.default
+
+        if loader_context:
+            context = ChainMap(loader_context, self.default_loader_context)
+        else:
+            context = self.default_loader_context
+
+        return [value for value in values if value] or context['default']
