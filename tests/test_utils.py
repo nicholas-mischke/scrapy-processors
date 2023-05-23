@@ -1,6 +1,6 @@
 
 import pytest
-from scrapy_processors.utils import get_callable, merge_context_dicts
+from scrapy_processors.utils import *
 
 # Generic callables
 def str_upper(value):
@@ -75,3 +75,17 @@ def test_merge_context_dicts_raises_ValueError():
     # Test with mismatched values for shared keys
     with pytest.raises(ValueError):
         merge_context_dicts(dict1, dict2)
+
+
+def test_context_to_kwargs():
+    def my_func(a, b, c):
+        ...
+    context = {'b': 2, 'c': 3, 'd': 4}
+
+    kwargs = context_to_kwargs(context, my_func)
+    assert kwargs == {'b': 2, 'c': 3}
+    
+    def my_func():
+        ...
+    kwargs = context_to_kwargs(context, my_func)
+    assert kwargs == {}

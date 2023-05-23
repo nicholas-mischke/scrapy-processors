@@ -20,7 +20,7 @@ T = TypeVar('T')  # Input type
 
 class Processor:
     """
-    A Processor-like class that uses an optional context to process values.
+    A Processor class that uses an optional context to process values.
 
     This class should be subclassed and the `process_value` method overridden
     to provide specific data cleaning or transformation functionality that could
@@ -31,13 +31,9 @@ class Processor:
     ...    pass
     This context can be used to get kwargs for function calls, for example.
 
-    The overridden `process_value` method should take two arguments, the value to
-    process and an optional context, perform some operation on it, and return the 
-    processed value.
-
     When an instance of a `Processor` subclass is called with an iterable
     of values and an optional context, it will return a list with the result of 
-    processing each value with the context.
+    processing each value with the context. Single items can be passed as well.
 
     Example:
 
@@ -85,7 +81,7 @@ class Processor:
     # It is used by the itemloaders package. 
     def __call__(
         self, 
-        values: Iterable[T], 
+        values: Union[T, Iterable[T]], 
         loader_context: Optional[Dict[str, Any]] = None
     ) -> List[Any]:
         """
@@ -375,9 +371,9 @@ class CharWhitespacePadding(Processor):
         print(result) # Output: ['7 * 3 = 21', '7 - 3 = 4']
     """
 
-    def __init__(self, chars: Tuple[str], lpad: int = 1, rpad: int = 1):
+    def __init__(self, chars: Union[str, Tuple[str, ...]], lpad: int = 1, rpad: int = 1):
         self.default_loader_context = {
-            'chars': chars,
+            'chars': arg_to_iter(chars),
             'lpad': lpad,
             'rpad': rpad
         }
@@ -868,6 +864,6 @@ class TakeAllTruthy(Processor):
     def __init__(self, default=None):
         self.default = default
 
-    def __call__(self, values: Iterable[Any]) -> List[Any]:
+    def __call__(self, values: Union[T, Iterable[T]]) -> List[Any]:
         values = arg_to_iter(values)
         return [value for value in values if value] or self.default

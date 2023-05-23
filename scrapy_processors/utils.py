@@ -1,15 +1,27 @@
 
 from inspect import isclass
+from typing import Any, Callable, Dict, Type, Union
+
 from itemloaders.utils import get_func_args
 
 
-def get_callable(arg):
+def get_callable(arg: Union[Callable, Type]) -> Callable:
     """
-    Given an argument, return a callable.
+    Returns a callable object given an argument.
 
-    If the argument is callable, return it.
-    If the argument is a class, instantiate it and return the instance.
-    If the argument or instiated class isn't callable, raise a TypeError.
+    If the argument is already callable, it's directly returned.
+    If the argument is a class, the class is initalized. If the instance has
+        a __call__ method, it's returned.
+    If the argument or instantiated class is not callable, a TypeError is raised.
+
+    Args:
+        arg: A callable object or a class.
+
+    Returns:
+        Callable object derived from the input argument.
+
+    Raises:
+        TypeError: If the argument isn't a callable or a class.
     """
     if (
         callable(arg)
@@ -28,9 +40,19 @@ def get_callable(arg):
         )
 
 
-def merge_context_dicts(dict1, dict2):
+def merge_context_dicts(dict1: Dict[str, Any], dict2: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Used to merge the default_loader_contexts of two Compose or MapCompose
+    Merges two context dictionaries, ensuring that shared keys have matching values.
+
+    Args:
+        dict1: First dictionary to merge.
+        dict2: Second dictionary to merge.
+
+    Returns:
+        A new dictionary that combines dict1 and dict2.
+
+    Raises:
+        ValueError: If shared keys between the dictionaries don't have matching values.
     """
     shared_keys = set(dict1.keys()) & set(dict2.keys())
 
@@ -43,16 +65,22 @@ def merge_context_dicts(dict1, dict2):
         raise ValueError(error_msg.strip())
 
     # Combine default_loader_contexts
-    default_loader_context = dict1.copy()
-    default_loader_context.update(dict2)
+    merged_context = dict1.copy()
+    merged_context.update(dict2)
 
-    return default_loader_context
+    return merged_context
 
 
-def context_to_kwargs(context, callable):
+def context_to_kwargs(context: Dict[str, Any], callable: Callable) -> Dict[str, Any]:
     """
-    Extracts the values from the context dict that are relevant to the callable
-    and returns them as a kwargs dict.
+    Extracts the values from a context dictionary that match the arguments of a callable.
+
+    Args:
+        context: Context dictionary with potential arguments for the callable.
+        callable: Callable function for which to extract relevant arguments.
+
+    Returns:
+        A dictionary with keys and values that match the arguments of the callable.
     """
     callable_args = get_func_args(callable)
     return {key: context[key] for key in callable_args if key in context}

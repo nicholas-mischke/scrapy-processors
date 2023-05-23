@@ -75,7 +75,7 @@ class MapCompose(BuiltInMapCompose):
         self.functions: Tuple[Callable[..., Any], ...] = tuple(
             get_callable(callable) for callable in callables
         )
-        self.default_loader_context: dict = default_loader_context
+        self.default_loader_context = default_loader_context
 
     def __add__(self, other: Any) -> 'MapCompose':
         """
@@ -210,7 +210,7 @@ class Compose(BuiltInCompose):
             get_callable(callable) for callable in callables
         )
         self.stop_on_none = default_loader_context.get("stop_on_none", True)
-        self.default_loader_context: dict = default_loader_context
+        self.default_loader_context = default_loader_context
 
     def __add__(self, other: Any) -> 'Compose':
         """

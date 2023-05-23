@@ -23,6 +23,21 @@ class TestProcessor:
         processor = Processor()
         assert 'loader_context' in get_func_args(processor.__call__)
 
+    def test__call__with_context(self):
+        """
+        Make sure it can call process_value with a context or without context.
+        """
+        class ContextSubClass(Processor):
+            def process_value(self, value, context):
+                ...
+
+        class ContextlessSubClass(Processor):
+            def process_value(self, value):
+                ...
+
+        context_subclass = ContextSubClass().__call__([])
+        contextless_subclass = ContextlessSubClass().__call__([])
+
     @pytest.fixture
     def processor_cls(self):
         class ProcessorSubClass(Processor):
@@ -118,6 +133,18 @@ class TestEnsureEncoding:
                 processor(input_value)
         else:
             assert processor(input_value)[0] == expected_value
+
+    def test_with_loader_context(self):
+        string = "Hello, World! 👋🌍 ä"
+        processor = EnsureEncoding('utf-16')
+        assert processor(string)[0] == string
+
+        with pytest.raises(UnicodeEncodeError):
+            processor(
+                string,
+                {'encoding': 'ascii', 'encoding_errors': 'strict',
+                    'decoding_errors': 'strict'}
+            )
 
 
 class TestNormalizeWhitespace:
@@ -224,6 +251,14 @@ class TestNormalizeWhitespace:
         input_value = f"Test  {whitespace}  String"
         assert processor(input_value)[0] == "Test String"
 
+    def test_with_loader_context(self):
+        string = "This is a sentence  .  "
+        processor = NormalizeWhitespace()
+
+        assert processor(string)[0] == "This is a sentence."
+        assert processor(string, {'lstrip_ignore': '.'})[
+            0] == "This is a sentence ."
+
 
 class TestCharWhitespacePadding:
 
@@ -250,6 +285,13 @@ class TestCharWhitespacePadding:
     ])
     def test_with_strings(self, math_formula_processor, input_value, expected_value):
         assert math_formula_processor(input_value)[0] == expected_value
+
+    def test_with_loader_context(self):
+        string = '1+1=2'
+        processor = CharWhitespacePadding(('+', '='), 1, 1)
+
+        assert processor(string)[0] == '1 + 1 = 2'
+        assert processor(string, {'chars': '='})[0] == '1+1 = 2'
 
 
 class TestNormalizeNumericString:
@@ -313,6 +355,13 @@ class TestNormalizeNumericString:
         processor = NormalizeNumericString(**processor_kwargs)
         assert processor(input_value)[0] == expected_value
 
+    def test_with_loader_context(self):
+        string = '1,000.000'
+        processor = NormalizeNumericString(keep_trailing_zeros=False)
+
+        assert processor(string)[0] == '1000'
+        assert processor(string, {'keep_trailing_zeros': True})[0] == '1000.00'
+
 
 class TestPriceParser:
 
@@ -341,6 +390,13 @@ class TestPriceParser:
         # Assert the attributes of the Price object
         assert math.isclose(price.amount, expected_amount, rel_tol=1e-9)
         assert price.currency == expected_currency
+
+    def test_with_loader_context(self):
+        price = '100.00'
+        processor = PriceParser(currency_hint='USD')
+
+        assert processor(price)[0].currency == 'USD'
+        assert processor(price, {'currency_hint': 'EUR'})[0].currency == 'EUR'
 
 
 class TestRemoveHTMLTags:
@@ -374,6 +430,14 @@ class TestDemojize:
     def test_process_value(self, processor, input_value, expected_value):
         assert processor(input_value)[0] == expected_value
 
+    def test_with_loader_context(self):
+        string = 'Python is fun 👍'
+        processor = Demojize()
+
+        assert processor(string)[0] == 'Python is fun :thumbs_up:'
+        assert processor(string, {'delimiters': ('¿', '?')})[0] == \
+            'Python is fun ¿thumbs_up?'
+
 
 class TestRemoveEmojis:
 
@@ -389,6 +453,14 @@ class TestRemoveEmojis:
     ])
     def test_process_value(self, processor, input_value, expected_value):
         assert processor(input_value)[0] == expected_value
+
+    def test_with_loader_context(self):
+        string = 'Python is fun 👍'
+        processor = RemoveEmojis()
+
+        assert processor(string)[0] == 'Python is fun '
+        assert processor(string, {'replace': "ain't it?"})[0] == \
+            "Python is fun ain't it?"
 
 
 class TestStripQuotes:
@@ -468,7 +540,8 @@ class TestStripQuotes:
             random_symbols = self.generate_random_symbols()
             test_string = random_symbols + "Test" + \
                 random_symbols + "String" + random_symbols
-            assert processor(test_string)[0] == "Test" + random_symbols + "String"
+            assert processor(test_string)[
+                0] == "Test" + random_symbols + "String"
 
 
 class TestStringToDateTime:
@@ -484,6 +557,15 @@ class TestStringToDateTime:
     def test_process_value(self, processor, input_value, expected_value):
         assert processor(input_value)[0] == expected_value
 
+    def test_with_loader_context(self):
+        format_1 = '2022-01-01, 12:00:00'
+        format_2 = 'January 1, 2022 12:00:00'
+        processor = StringToDateTime()
+
+        assert processor(format_1)[0] == datetime(2022, 1, 1, 12, 0, 0)
+        assert processor(format_2, {'format': '%B %d, %Y %H:%M:%S'})[0] == \
+            datetime(2022, 1, 1, 12, 0, 0)
+
 
 class TestStringToDate:
 
@@ -498,6 +580,15 @@ class TestStringToDate:
     def test_process_value(self, processor, input_value, expected_value):
         assert processor(input_value)[0] == expected_value
 
+    def test_with_loader_context(self):
+        format_1 = '2022-01-01'
+        format_2 = 'January 1, 2022'
+        processor = StringToDate()
+
+        assert processor(format_1)[0] == date(2022, 1, 1)
+        assert processor(format_2, {'format': '%B %d, %Y'})[0] == \
+            date(2022, 1, 1)
+
 
 class TestStringToTime:
 
@@ -511,6 +602,15 @@ class TestStringToTime:
     ])
     def test_process_value(self, processor, input_value, expected_value):
         assert processor(input_value)[0] == expected_value
+
+    def test_with_loader_context(self):
+        format_1 = '10:30:00'
+        format_2 = '10:30:00 AM'
+        processor = StringToTime()
+
+        assert processor(format_1)[0] == time(10, 30, 0)
+        assert processor(format_2, {'format': '%I:%M:%S %p'})[0] == \
+            time(10, 30, 0)
 
 
 class TestTakeAllTruthy:
