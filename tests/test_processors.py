@@ -544,7 +544,7 @@ class TestTakeAllTruthy:
 
     @pytest.fixture
     def processor(self):
-        return TakeAllTruthy(default=None)
+        return TakeAllTruthy(default=[])
 
     @pytest.mark.parametrize("input_values, expected_output", [
         (
@@ -553,13 +553,13 @@ class TestTakeAllTruthy:
         ),
         (
             [None, False, '', [], 0],
-            None
+            []
         ),
         (
             [0, '', False, 7, [], None, 'empty'],
             [7, 'empty']
         ),
-        ([], None),
+        ([], []),
     ])
     def test_process_value(self, processor, input_values, expected_output):
         assert processor(input_values) == expected_output

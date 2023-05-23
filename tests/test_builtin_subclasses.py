@@ -54,40 +54,52 @@ class TestMapCompose:
         assert clean_processor(input_values) == expected_clean
 
     def test__add__(self):
-        map1 = MapCompose(str_upper, foo='bar')
-        map2 = MapCompose(str_reverse, foo='bar')
-        map3 = MapCompose(str_reverse, foo='baz')
+        map_compose_1 = MapCompose(str_upper, foo='bar')
+        map_compose_2 = MapCompose(str_reverse, foo='bar')
         callable = str_reverse
-        non_callable = 'some string'
 
         # Add two MapCompose objects
-        result = map1 + map2
+        result = map_compose_1 + map_compose_2
         assert isinstance(result, MapCompose)
         assert result.functions == (str_upper, str_reverse)
         assert result.default_loader_context == {'foo': 'bar'}
-
-        # Add two MapCompose objects with different loader_context
-        with pytest.raises(ValueError) as error:
-            result = map1 + map3
-        assert str(error.value) == (
-            "Cannot add Compose or MapCompose objects with mismatched "
-            "key, value pairs in their default_loader_context\n"
-            "Key: foo, self[foo]: bar, other[foo]: baz"
-        )
 
         # Add MapCompose object with callable
-        result = map1 + callable
+        result = map_compose_1 + callable
         assert isinstance(result, MapCompose)
         assert result.functions == (str_upper, str_reverse)
         assert result.default_loader_context == {'foo': 'bar'}
+        
+        # Add MapCompose with collection of callables
+        result = map_compose_1 + [str_reverse, str_reverse]
+        assert isinstance(result, MapCompose)
+        assert result.functions == (str_upper, str_reverse, str_reverse)
+        assert result.default_loader_context == {'foo': 'bar'}
+
+    def test__add__TypeError(self):
+        map_compose = MapCompose(str_upper, foo='bar')
+        non_callable = 'some string'
 
         # Add MapCompose object with non-callable
         with pytest.raises(TypeError) as error:
-            result = map1 + non_callable
+            result = map_compose + non_callable
         assert str(error.value) == (
-            "Unsupported operand type for +: 'MapCompose' and 'str'"
+            "Unsupported operand type(s) for +: 'MapCompose' and 'str'"
         )
+    
+    def test__add__ValueError(self):
+        map_compose_1 = MapCompose(str_upper, foo='bar')
+        map_compose_2 = MapCompose(str_reverse, foo='baz')
 
+        # Add two MapCompose objects with different loader_context
+        with pytest.raises(ValueError) as error:
+            result = map_compose_1 + map_compose_2
+
+        assert str(error.value) == (
+            "Cannot add MapCompose objects when the shared keys in their "
+            "default_loader_contexts have different values.\n"
+            "Mismatched Pairs: self[foo]: bar, other[foo]: baz" 
+        )
 
 # Generic callables on a list obj
 def get_length(list_obj):
@@ -155,40 +167,53 @@ class TestCompose:
             expected_reverse_sort_and_capitalized_processor
 
     def test__add__(self):
-        compose1 = Compose(get_first, foo='bar')
-        compose2 = Compose(get_length, foo='bar')
-        compose3 = Compose(get_length, foo='baz')
+        compose_1 = Compose(get_first, foo='bar')
+        compose_2 = Compose(get_length, foo='bar')
         callable = get_length
-        non_callable = 'some string'
+        lambda_arg_to_iterable = lambda x: [x]
 
         # Add two Compose objects
-        result = compose1 + compose2
+        result = compose_1 + compose_2
         assert isinstance(result, Compose)
         assert result.functions == (get_first, get_length)
         assert result.default_loader_context == {'foo': 'bar'}
-
-        # Add two Compose objects with different loader_context
-        with pytest.raises(ValueError) as error:
-            result = compose1 + compose3
-        assert str(error.value) == (
-            "Cannot add Compose or MapCompose objects with mismatched "
-            "key, value pairs in their default_loader_context\n"
-            "Key: foo, self[foo]: bar, other[foo]: baz"
-        )
 
         # Add Compose object with callable
-        result = compose1 + callable
+        result = compose_1 + callable
         assert isinstance(result, Compose)
         assert result.functions == (get_first, get_length)
         assert result.default_loader_context == {'foo': 'bar'}
+        
+        # Add Compose with collection of callables
+        result = compose_1 + [get_length, lambda_arg_to_iterable]
+        assert isinstance(result, Compose)
+        assert result.functions == (get_first, get_length, lambda_arg_to_iterable)
+        assert result.default_loader_context == {'foo': 'bar'}
+
+    def test__add__TypeError(self):
+        compose_1 = Compose(get_first, foo='bar')
+        non_callable = 'some string'
 
         # Add Compose object with non-callable
         with pytest.raises(TypeError) as error:
-            result = compose1 + non_callable
+            result = compose_1 + non_callable
         assert str(error.value) == (
-            "Unsupported operand type for +: 'Compose' and 'str'"
+            "Unsupported operand type(s) for +: 'Compose' and 'str'"
         )
+    
+    def test__add__ValueError(self):
+        compose_1 = Compose(get_first, foo='bar')
+        compose_2 = Compose(get_length, foo='baz')
 
+        # Add two Compose objects with different loader_context
+        with pytest.raises(ValueError) as error:
+            result = compose_1 + compose_2
+        assert str(error.value) == (
+            "Cannot add Compose objects when the shared keys in their "
+            "default_loader_contexts have different values.\n"
+            "Mismatched Pairs: self[foo]: bar, other[foo]: baz" 
+        )
+            
 
 def test_TakeAll():
     assert isinstance(TakeAll(), Identity)

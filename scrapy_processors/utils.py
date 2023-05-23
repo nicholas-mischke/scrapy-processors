@@ -1,8 +1,16 @@
 
 from inspect import isclass
+from itemloaders.utils import get_func_args
 
 
 def get_callable(arg):
+    """
+    Given an argument, return a callable.
+
+    If the argument is callable, return it.
+    If the argument is a class, instantiate it and return the instance.
+    If the argument or instiated class isn't callable, raise a TypeError.
+    """
     if (
         callable(arg)
         and not isclass(arg)  # classes need to be instantiated
@@ -21,17 +29,17 @@ def get_callable(arg):
 
 
 def merge_context_dicts(dict1, dict2):
+    """
+    Used to merge the default_loader_contexts of two Compose or MapCompose
+    """
     shared_keys = set(dict1.keys()) & set(dict2.keys())
 
     error_msg = ''
     for key in shared_keys:
         if dict1[key] != dict2[key]:
-            error_msg += f"Key: {key}, self[{key}]: {dict1[key]}, other[{key}]: {dict2[key]}\n"
+            error_msg += f"self[{key}]: {dict1[key]}, other[{key}]: {dict2[key]}\n"
     if error_msg:
-        error_msg = (
-            "Cannot add Compose or MapCompose objects with mismatched "
-            "key, value pairs in their default_loader_context\n"
-        ) + error_msg
+        error_msg = 'Mismatched Pairs: ' + error_msg
         raise ValueError(error_msg.strip())
 
     # Combine default_loader_contexts
@@ -39,3 +47,18 @@ def merge_context_dicts(dict1, dict2):
     default_loader_context.update(dict2)
 
     return default_loader_context
+
+
+def context_to_kwargs(context, callable, mapping=None):
+    """
+    Extracts the values from the context dict that are relevant to the callable
+    and returns them as a kwargs dict.
+    """
+    callable_args = get_func_args(callable)
+
+    # Replace context keys with callable keys
+    for callable_arg, context_arg in (mapping or {}).items():
+        if context_arg in context:
+            context[callable_arg] = context.pop(context_arg)
+
+    return {key: context[key] for key in callable_args if key in context}
