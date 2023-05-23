@@ -3,7 +3,7 @@
 import re
 from collections import ChainMap
 from datetime import datetime, date, time
-from typing import Any, Dict, Iterable, Optional, List, Tuple, TypeVar
+from typing import Any, Callable, Dict, Iterable, Optional, List, Set, Tuple, TypeVar, Union
 
 # 3rd 🎉 imports
 import emoji
@@ -11,7 +11,8 @@ from bs4 import BeautifulSoup
 from price_parser import Price
 
 # itemloaders imports
-from itemloaders.utils import arg_to_iter
+from itemloaders.utils import arg_to_iter, get_func_args
+from scrapy_processors.utils import context_to_kwargs
 
 
 T = TypeVar('T')  # Input type
@@ -19,71 +20,29 @@ T = TypeVar('T')  # Input type
 
 class Processor:
     """
-    Abstract base class for processing values when using the itemloaders package.
-
-    This class should be subclassed and the `process_value` method overridden
-    to provide specific data cleaning or transformation functionality.
-
-    The overridden `process_value` method should take a single argument (a value to
-    process), perform some operation on it, and return the processed value.
-
-    When an instance of a `Processor` subclass is called with an iterable of values,
-    it will return a list with the result of processing each value.
-
-    Example:
-
-    ```python
-    class UpperCaseProcessor(Processor):
-        def process_value(self, value: str) -> str:
-            return value.upper()
-
-    upper_case_processor = UpperCaseProcessor()
-    print(upper_case_processor(["hello", "world"]))  # Output: ['HELLO', 'WORLD']
-    ```
-    """
-
-    def process_value(self, value: T) -> Any:
-        """
-        Process a single value.
-
-        This method must be overridden by subclasses.
-
-        :param value: The value to process.
-        :return: The processed value.
-        """
-        raise NotImplementedError()
-
-    def __call__(self, values: Iterable[T]) -> List[Any]:
-        """
-        Process a collection of values.
-
-        :param values: An iterable of values to process.
-        :return: A list of processed values.
-        """
-        values = arg_to_iter(values)
-        return [self.process_value(value) for value in values]
-
-
-class ContextProcessor:
-    """
     A Processor-like class that uses an optional context to process values.
 
     This class should be subclassed and the `process_value` method overridden
     to provide specific data cleaning or transformation functionality that could
     optionally use a context.
+    >>> def process_value(value, context):
+    ...    pass
+    >>> def proess_value(value):
+    ...    pass
+    This context can be used to get kwargs for function calls, for example.
 
     The overridden `process_value` method should take two arguments, the value to
     process and an optional context, perform some operation on it, and return the 
     processed value.
 
-    When an instance of a `ContextProcessor` subclass is called with an iterable
+    When an instance of a `Processor` subclass is called with an iterable
     of values and an optional context, it will return a list with the result of 
     processing each value with the context.
 
     Example:
 
     ```python
-    class ReverserProcessor(ContextProcessor):
+    class ReverserProcessor(Processor):
         def process_value(self, value: str, context: Optional[dict] = None) -> str:
             reverse = context.get('reverse') if context is not None else False
             return value[::-1] if reverse else value
@@ -104,8 +63,14 @@ class ContextProcessor:
     def __init__(self, **default_loader_context: Dict[str, Any]):
         self.default_loader_context = default_loader_context
 
-    def process_value(self, value: T, context: Optional[Dict[str, Any]] = None) -> Any:
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> Any:
         """
+        If calling directoy, default_loader_context isn't used. 
+        
         Process a single value using an optional context.
 
         This method must be overridden by subclasses.
@@ -116,9 +81,13 @@ class ContextProcessor:
         """
         raise NotImplementedError()
 
-    # The loader_context argument is passed from ItemLoader
-    # Do not change the name of this argument
-    def __call__(self, values: Iterable[T], loader_context: Optional[Dict[str, Any]] = None) -> List[Any]:
+    # The `loader_context` parameter cannot be renamed. 
+    # It is used by the itemloaders package. 
+    def __call__(
+        self, 
+        values: Iterable[T], 
+        loader_context: Optional[Dict[str, Any]] = None
+    ) -> List[Any]:
         """
         Process a collection of values using an optional context.
 
@@ -133,7 +102,9 @@ class ContextProcessor:
         else:
             context = self.default_loader_context
 
-        return [self.process_value(value, context) for value in values]
+        if 'context' in get_func_args(self.process_value):
+            return [self.process_value(value, context) for value in values]
+        return [self.process_value(value) for value in values]
 
 
 class EnsureEncoding(Processor):
@@ -167,15 +138,32 @@ class EnsureEncoding(Processor):
         str: The input string encoded with the desired encoding.
     """
 
-    def __init__(self, encoding: str = 'utf-8', ignore_encoding_errors: bool = True):
-        self.encoding = encoding
-        self.ignore_encoding_errors = ignore_encoding_errors
-
-    def process_value(self, value: str) -> str:
-        return str(value).encode(
-            self.encoding,
-            errors="ignore" if self.ignore_encoding_errors else "strict"
-        ).decode(self.encoding)
+    def __init__(
+        self, 
+        encoding: str = 'utf-8', 
+        encoding_errors: str = 'ignore',
+        decoding_errors: str = 'strict'
+    ):
+        self.default_loader_context = {
+            'encoding': encoding, 
+            'encoding_errors': encoding_errors,
+            'decoding_errors': decoding_errors
+        }
+        
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        encoding = context['encoding']
+        encoding_errors = context['encoding_errors']
+        decoding_errors = context['decoding_errors']
+        
+        incoming_string = str(value)
+        bytes = incoming_string.encode(encoding, encoding_errors)
+        outgoing_string = bytes.decode(encoding, decoding_errors)
+        
+        return outgoing_string
 
 
 class NormalizeWhitespace(Processor):
@@ -287,17 +275,25 @@ class NormalizeWhitespace(Processor):
     # '\x92', '\x94', '\x91', '\x93'
     def __init__(
         self,
-        lstrip_punctuation: Tuple[str] = (
-            '.', ',', '!', '?', ')', ']', '}', ':', ';', '%', '\u2019', '\u201D', '\x92', '\x94'),
-        rstrip_punctuation: Tuple[str] = (
-            '(', '$', '[', '{', '#', '\u2018', '\u201C', '\x91', '\x93'),
-        strip_punctuation:  Tuple[str] = ('-', '/', '_', '@', '\\', '^', '~')
+        lstrip_chars: Set[str] = {
+            '.', ',', '!', '?', ')', ']', '}', ':', ';', '%', '\u2019', '\u201D', '\x92', '\x94'
+        },
+        rstrip_chars: Set[str] = {
+            '(', '$', '[', '{', '#', '\u2018', '\u201C', '\x91', '\x93'
+        },
+        strip_chars: Set[str] = {'-', '/', '_', '@', '\\', '^', '~'}
     ):
-        self.lstrip_punctuation = lstrip_punctuation
-        self.rstrip_punctuation = rstrip_punctuation
-        self.strip_punctuation = strip_punctuation
+        self.default_loader_context = {
+            'lstrip_chars': lstrip_chars,
+            'rstrip_chars': rstrip_chars,
+            'strip_chars': strip_chars
+        }
 
-    def process_value(self, value: str) -> str:
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
         # Step 1) Remove zero-width spaces
         value = re.sub(r'[\u200b\ufeff]', '', value)
 
@@ -308,19 +304,34 @@ class NormalizeWhitespace(Processor):
 
         # Remove trailing whitespaces from lstrip_punctuation
         # "This is a sentence !" --> "This is a sentence!"
-        lstrip = re.escape(''.join(self.lstrip_punctuation))
+        lstrip = context['lstrip_chars']
+        lstrip_add = context.get('lstrip_add', set())
+        lstrip_ignore = context.get('lstrip_ignore', set())
+        lstrip = lstrip.union(lstrip_add).difference(lstrip_ignore)
+        
+        lstrip = re.escape(''.join(lstrip))
         lstrip_pattern = r'\s*(?=[' + lstrip + r'])'
         value = re.sub(lstrip_pattern, '', value)
 
         # Remove leading whitespaces from rstrip_punctuation
         # "$ 100" --> "$100"
-        rstrip = re.escape(''.join(self.rstrip_punctuation))
+        rstrip = context['rstrip_chars']
+        rstrip_add = context.get('rstrip_add', set())
+        rstrip_ignore = context.get('rstrip_ignore', set())
+        rstrip = rstrip.union(rstrip_add).difference(rstrip_ignore)
+        
+        rstrip = re.escape(''.join(rstrip))
         rstrip_pattern = r'(?<=[' + rstrip + r'])\s*'
         value = re.sub(rstrip_pattern, '', value)
 
         # Remove leading and trailing whitespaces from strip_punctuation
         # "Sandwitch - The - Hyphens" --> "Sandwitch-The-Hyphens"
-        strip = re.escape(''.join(self.strip_punctuation))
+        strip = context['strip_chars']
+        strip_add = context.get('strip_add', set())
+        strip_ignore = context.get('strip_ignore', set())
+        strip = strip.union(strip_add).difference(strip_ignore)
+        
+        strip = re.escape(''.join(strip))
         strip_pattern = r'\s*([' + strip + r'])\s*'
         value = re.sub(strip_pattern, r'\1', value)
 
@@ -365,15 +376,24 @@ class CharWhitespacePadding(Processor):
     """
 
     def __init__(self, chars: Tuple[str], lpad: int = 1, rpad: int = 1):
-        self.chars = chars
-        self.lpad = lpad
-        self.rpad = rpad
-
-    def process_value(self, value: str) -> str:
-        pattern = "[" + re.escape("".join(self.chars)) + "]"
+        self.default_loader_context = {
+            'chars': chars,
+            'lpad': lpad,
+            'rpad': rpad
+        }
+        
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        
+        chars, lpad, rpad = context['chars'], context['lpad'], context['rpad']
+        
+        pattern = "[" + re.escape("".join(chars)) + "]"
         return re.sub(
             r'\s*' + pattern + r'\s*', lambda match: ' ' *
-            self.lpad + match.group(0).strip() + ' '*self.rpad,
+            lpad + match.group(0).strip() + ' '*rpad,
             value
         )
 
@@ -430,22 +450,31 @@ class NormalizeNumericString(Processor):
         decimal_sep: str = '.',
         decimal_places: int = 2,
         keep_trailing_zeros: bool = False,
-        input_decimal_sep: str = '.'
+        input_value_decimal_sep: str = '.'
     ):
-        self.thousands_sep = thousands_sep
-        self.decimal_sep = decimal_sep
-        self.decimal_places = decimal_places
-        self.keep_trailing_zeros = keep_trailing_zeros
+        self.default_loader_context = {
+            'thousands_sep': thousands_sep,
+            'decimal_sep': decimal_sep,
+            'decimal_places': decimal_places,
+            'keep_trailing_zeros': keep_trailing_zeros,
+            'input_value_decimal_sep': input_value_decimal_sep
+        }
 
-        # This may be better passed as context and subclassing this class
-        # from ContextProcessor instead of Processor
-        self.input_decimal_sep = input_decimal_sep
-
-    def process_value(self, value: str) -> str:
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
         The curr_thousands_sep and curr_decimal_sep arguments are used to determine
         Need to be supplied so the string can be seperated into it's integer and decimal parts.
         """
+        thousands_sep = context['thousands_sep']
+        decimal_sep = context['decimal_sep']
+        decimal_places = context['decimal_places']
+        keep_trailing_zeros = context['keep_trailing_zeros']
+        input_value_decimal_sep = context['input_value_decimal_sep']
+        
         # The price_parser.Price object is good at detecting various number formats.
         # 1 000 000,00
         # 1,000,000.00
@@ -453,13 +482,13 @@ class NormalizeNumericString(Processor):
         # so no custom logic needs to be implemented to turn string into number.
         num = Price.fromstring(
             value,
-            decimal_separator=self.input_decimal_sep
+            decimal_separator=input_value_decimal_sep
         ).amount_float
 
         # The f-string won't take all possible formats for thousands_sep and decimal_sep
         # For example f"{num: ,2f}" will raise a ValueError (use space for thousands_sep, and comma for decimal_sep)
         # So we'll use default values and replace them later
-        num = f"{num:,.{self.decimal_places}f}"
+        num = f"{num:,.{decimal_places}f}"
 
         # If we have the number 1,000,000.00 and we wish to use
         # a dot as the thousands_sep and a comma as the decimal_sep
@@ -472,12 +501,12 @@ class NormalizeNumericString(Processor):
         num = num.replace('.', 'DECIMAL_SEP')
 
         # Now to replace the temporary values with the user supplied values
-        num = num.replace('THOUSANDS_SEP', self.thousands_sep)
-        num = num.replace('DECIMAL_SEP', self.decimal_sep)
+        num = num.replace('THOUSANDS_SEP', thousands_sep)
+        num = num.replace('DECIMAL_SEP', decimal_sep)
 
-        if self.keep_trailing_zeros is False:
+        if keep_trailing_zeros is False:
             # Return integer if no non-zero decimal places
-            num = num.rstrip('0').rstrip(self.decimal_sep)
+            num = num.rstrip('0').rstrip(decimal_sep)
 
         return num
 
@@ -509,9 +538,25 @@ class PriceParser(Processor):
         for price in result:
             print(price.amount, price.currency)  # Output: 19.99 $, 9.99 €, 49.99 £
     """
+    
+    def __init__(
+        self, 
+        currency_hint: Optional[str] = None,
+        decimal_sep: Optional[str] = None
+    ):
+        self.default_loader_context = {
+            'currency_hint': currency_hint,
+            'decimal_separator': decimal_sep
+        }
 
-    def process_value(self, value: str) -> Price:
-        return Price.fromstring(value)
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> Price:
+        
+        kwargs = context_to_kwargs(context, Price.fromstring)
+        return Price.fromstring(value, **kwargs)
 
 
 class RemoveHTMLTags(Processor):
@@ -577,12 +622,27 @@ class Demojize(Processor):
         print(result)  # Output: [':face_with_tears_of_joy:', ':smiling_face_with_hearts:', ':thumbs_up:']
     """
 
-    def __init__(self, *args: Tuple, **kwargs: Dict):
-        self.args = args
-        self.kwargs = kwargs
-
-    def process_value(self, value: str) -> str:
-        return emoji.demojize(value, *self.args, **self.kwargs)
+    def __init__(self,         
+        delimiters: Tuple[str, str] = (':', ':'),
+        language: str = 'en',
+        version: Optional[Union[str, int]] = None,
+        handle_version: Optional[Union[str, Callable[[str, dict], str]]] = None
+    ):
+        self.default_loader_context = {
+            'delimiters': delimiters,
+            'language': language,
+            'version': version,
+            'handle_version': handle_version
+        }
+        
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        
+        kwargs = context_to_kwargs(context, emoji.demojize)
+        return emoji.demojize(value, **kwargs)
 
 
 class RemoveEmojis(Processor):
@@ -611,12 +671,24 @@ class RemoveEmojis(Processor):
         print(result)  # Output: ['', 'I love you! ', '']
     """
 
-    def __init__(self, *args: Tuple, **kwargs: Dict):
-        self.args = args
-        self.kwargs = kwargs
+    def __init__(
+        self, 
+        replace: Union[str, Callable[[str, dict], str]] = '', 
+        version: int = -1
+    ):
+        self.default_loader_context = {
+            'replace': replace,
+            'version': version
+        }
 
-    def process_value(self, value: str) -> str:
-        return emoji.replace_emoji(value, *self.args, **self.kwargs)
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        
+        kwargs = context_to_kwargs(context, emoji.replace_emoji)
+        return emoji.replace_emoji(value, **kwargs)
 
 
 class StripQuotes(Processor):
@@ -675,10 +747,16 @@ class StringToDateTime(Processor):
     """
 
     def __init__(self, format: str = '%Y-%m-%d, %H:%M:%S'):
-        self.format = format
+        self.default_loader_context = {
+            'format': format
+        }
 
-    def process_value(self, value: str) -> datetime:
-        return datetime.strptime(value, self.format)
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> datetime:
+        return datetime.strptime(value, context['format'])
 
 
 class StringToDate(Processor):
@@ -708,10 +786,16 @@ class StringToDate(Processor):
     """
 
     def __init__(self, format: str = '%Y-%m-%d'):
-        self.format = format
+        self.default_loader_context = {
+            'format': format
+        }
 
-    def process_value(self, value: str) -> date:
-        return datetime.strptime(value, self.format).date()
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> date:
+        return datetime.strptime(value, context['format']).date()
 
 
 class StringToTime(Processor):
@@ -742,10 +826,16 @@ class StringToTime(Processor):
     """
 
     def __init__(self, format: str = '%H:%M:%S'):
-        self.format = format
+        self.default_loader_context = {
+            'format': format
+        }
 
-    def process_value(self, value: str) -> time:
-        return datetime.strptime(value, self.format).time()
+    def process_value(
+        self, 
+        value: T, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> time:
+        return datetime.strptime(value, context['format']).time()
 
 
 class TakeAllTruthy(Processor):

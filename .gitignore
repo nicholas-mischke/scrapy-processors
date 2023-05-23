@@ -1,4 +1,6 @@
 .vscode
+# I use playground.py to test out code snippets
+playground.py 
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

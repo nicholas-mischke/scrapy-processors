@@ -19,36 +19,13 @@ class TestProcessor:
         with pytest.raises(NotImplementedError):
             processor.process_value('value')
 
-    @pytest.fixture
-    def processor(self):
-        class ProcessorSubClass(Processor):
-            def process_value(self, value):
-                return value.upper()
-        return ProcessorSubClass()
-
-    @pytest.mark.parametrize("input_values, expected_output", [
-        (["hello", "world"], ["HELLO", "WORLD"]),
-        (["python", "programming"], ["PYTHON", "PROGRAMMING"]),
-        ([], []),
-    ])
-    def test__call__(self, processor, input_values, expected_output):
-        assert processor(input_values) == expected_output
-
-
-class TestContextProcessor:
-
-    def test_process_value(self):
-        processor = ContextProcessor()
-        with pytest.raises(NotImplementedError):
-            processor.process_value('value')
-
     def test_loader_context_param(self):
-        processor = ContextProcessor()
+        processor = Processor()
         assert 'loader_context' in get_func_args(processor.__call__)
 
     @pytest.fixture
     def processor_cls(self):
-        class ContextProcessorSubClass(ContextProcessor):
+        class ProcessorSubClass(Processor):
             def process_value(self, value, context):
                 if context.get('uppercase') is True:
                     return value.upper()
@@ -58,7 +35,7 @@ class TestContextProcessor:
 
                 return value
 
-        return ContextProcessorSubClass
+        return ProcessorSubClass
 
     @pytest.mark.parametrize(
         ("default_loader_context, loader_context, input_values, expected_output"),
@@ -96,51 +73,51 @@ class TestContextProcessor:
 class TestEnsureEncoding:
 
     # English, Japanese & Russian strings in UTF-8, UTF-16, ASCII & Latin-1
-    @pytest.mark.parametrize("input_value, expected_value, encoding, ignore", [
+    @pytest.mark.parametrize("input_value, expected_value, encoding, encoding_errors", [
         # UTF-8 (Default encoding), English
-        ("I Love Python", "I Love Python", "utf-8", True),
+        ("I Love Python", "I Love Python", "utf-8", "ignore"),
 
         # UTF-8 (Default encoding), Japanese
-        ("日本語が大好きです", "日本語が大好きです", "utf-8", True),
+        ("日本語が大好きです", "日本語が大好きです", "utf-8", "ignore"),
 
         # UTF-8 (Default encoding), Russian
-        ("Я люблю Python", "Я люблю Python", "utf-8", True),
+        ("Я люблю Python", "Я люблю Python", "utf-8", "ignore"),
 
         # UTF-16 (Default encoding), English
-        ("I Love Python", "I Love Python", "utf-16", True),
+        ("I Love Python", "I Love Python", "utf-16", "ignore"),
 
         # UTF-16 (Default encoding), Japanese
-        ("日本語が大好きです", "日本語が大好きです", "utf-16", True),
+        ("日本語が大好きです", "日本語が大好きです", "utf-16", "ignore"),
 
         # UTF-16 (Default encoding), Russian
-        ("Я люблю Python", "Я люблю Python", "utf-16", True),
+        ("Я люблю Python", "Я люблю Python", "utf-16", "ignore"),
 
         # ASCII (Default encoding), English
-        ("I Love Python", "I Love Python", "ascii", True),
+        ("I Love Python", "I Love Python", "ascii", "ignore"),
 
         # ASCII (Default encoding), Japanese (Raises UnicodeEncodeError)
-        ("日本語が大好きです", "ascii cannot encode", "ascii", False),
+        ("日本語が大好きです", "ascii cannot encode", "ascii", "strict"),
 
         # ASCII (Default encoding), Russian (Raises UnicodeEncodeError)
-        ("Я люблю Python", "ascii cannot encode", "ascii", False),
+        ("Я люблю Python", "ascii cannot encode", "ascii", "strict"),
 
         # Latin-1 (Default encoding), English
-        ("I Love Python", "I Love Python", "latin-1", True),
+        ("I Love Python", "I Love Python", "latin-1", "ignore"),
 
         # Latin-1 (Default encoding), Japanese (Raises UnicodeEncodeError)
-        ("日本語が大好きです", "latin-1 cannot encode", "latin-1", False),
+        ("日本語が大好きです", "latin-1 cannot encode", "latin-1", "strict"),
 
         # Latin-1 (Default encoding), Russian (Raises UnicodeEncodeError)
-        ("Я люблю Python", "latin-1 cannot encode", "latin-1", False),
+        ("Я люблю Python", "latin-1 cannot encode", "latin-1", "strict"),
     ])
-    def test_process_value(self, input_value, expected_value, encoding, ignore):
-        processor = EnsureEncoding(encoding, ignore)
+    def test_process_value(self, input_value, expected_value, encoding, encoding_errors):
+        processor = EnsureEncoding(encoding, encoding_errors)
 
         if expected_value.endswith("cannot encode"):
             with pytest.raises(UnicodeEncodeError):
-                processor.process_value(input_value)
+                processor(input_value)
         else:
-            assert processor.process_value(input_value) == expected_value
+            assert processor(input_value)[0] == expected_value
 
 
 class TestNormalizeWhitespace:
@@ -184,7 +161,7 @@ class TestNormalizeWhitespace:
         ("TrailingWhitespace ", "TrailingWhitespace"),
     ])
     def test_with_strings(self, processor, input_value, expected_value):
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
     @pytest.mark.parametrize("whitespace", [
         # This row may have chars that are repeated below
@@ -245,7 +222,7 @@ class TestNormalizeWhitespace:
     ])
     def test_whitespace_characters(self, processor, whitespace):
         input_value = f"Test  {whitespace}  String"
-        assert processor.process_value(input_value) == "Test String"
+        assert processor(input_value)[0] == "Test String"
 
 
 class TestCharWhitespacePadding:
@@ -272,8 +249,7 @@ class TestCharWhitespacePadding:
         ("1+1<3", "1 + 1 < 3"),
     ])
     def test_with_strings(self, math_formula_processor, input_value, expected_value):
-        assert math_formula_processor.process_value(
-            input_value) == expected_value
+        assert math_formula_processor(input_value)[0] == expected_value
 
 
 class TestNormalizeNumericString:
@@ -309,7 +285,7 @@ class TestNormalizeNumericString:
     ])
     def test_seperators(self, processor_kwargs, input_value, expected_value):
         processor = NormalizeNumericString(**processor_kwargs)
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
     @pytest.mark.parametrize("processor_kwargs, input_value, expected_value", [
         ({'decimal_places': 0}, "1000.75", "1001"),
@@ -319,7 +295,7 @@ class TestNormalizeNumericString:
     ])
     def test_rounding(self, processor_kwargs, input_value, expected_value):
         processor = NormalizeNumericString(**processor_kwargs)
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
     @pytest.mark.parametrize("processor_kwargs, input_value, expected_value", [
         (
@@ -335,7 +311,7 @@ class TestNormalizeNumericString:
     ])
     def test_keep_trailing_zeros(self, processor_kwargs, input_value, expected_value):
         processor = NormalizeNumericString(**processor_kwargs)
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
 
 class TestPriceParser:
@@ -345,7 +321,7 @@ class TestPriceParser:
         return PriceParser()
 
     @pytest.mark.parametrize(
-        "value, expected_amount, expected_currency",
+        "input_value, expected_amount, expected_currency",
         [
             ("USD 100.00", 100.00, "USD"),      # United States Dollars
             ("EUR 50.99", 50.99, "EUR"),        # Euros
@@ -357,11 +333,10 @@ class TestPriceParser:
     )
     def test_process_value(
         self, processor,
-        value, expected_amount, expected_currency
+        input_value, expected_amount, expected_currency
     ):
-
         # Process the value
-        price = processor.process_value(value)
+        price = processor(input_value)[0]
 
         # Assert the attributes of the Price object
         assert math.isclose(price.amount, expected_amount, rel_tol=1e-9)
@@ -381,7 +356,7 @@ class TestRemoveHTMLTags:
         ("", ""),
     ])
     def test_process_value(self, processor, input_value, expected_value):
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
 
 class TestDemojize:
@@ -397,7 +372,7 @@ class TestDemojize:
         ("", ""),
     ])
     def test_process_value(self, processor, input_value, expected_value):
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
 
 class TestRemoveEmojis:
@@ -413,7 +388,7 @@ class TestRemoveEmojis:
         ("", ""),
     ])
     def test_process_value(self, processor, input_value, expected_value):
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
 
 class TestStripQuotes:
@@ -429,7 +404,7 @@ class TestStripQuotes:
          "There are only two ways to live your life. One is as though nothing is a miracle. The other is as though everything is a miracle."),
     ])
     def test_process_value_with_strings(self, processor, input_value, expected_value):
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
     quotes = [
         # UTF-8 & UTF-16
@@ -474,8 +449,7 @@ class TestStripQuotes:
     @pytest.mark.parametrize("symbol", symbols)
     def test_process_value(self, processor, symbol):
         test_string = symbol + "Test" + symbol + "String" + symbol
-        assert processor.process_value(
-            test_string) == "Test" + symbol + "String"
+        assert processor(test_string)[0] == "Test" + symbol + "String"
 
     def test_remove_all(self, processor):
         quotes = ''.join(TestStripQuotes.quotes)
@@ -484,7 +458,7 @@ class TestStripQuotes:
 
         test_string = all + "Test" + all + "String" + all
 
-        assert processor.process_value(test_string) == "Test" + all + "String"
+        assert processor(test_string)[0] == "Test" + all + "String"
 
     def test_random(self, processor):
         """"
@@ -494,8 +468,7 @@ class TestStripQuotes:
             random_symbols = self.generate_random_symbols()
             test_string = random_symbols + "Test" + \
                 random_symbols + "String" + random_symbols
-            assert processor.process_value(
-                test_string) == "Test" + random_symbols + "String"
+            assert processor(test_string)[0] == "Test" + random_symbols + "String"
 
 
 class TestStringToDateTime:
@@ -509,7 +482,7 @@ class TestStringToDateTime:
         ("2023-05-15, 09:30:00", datetime(2023, 5, 15, 9, 30, 0))
     ])
     def test_process_value(self, processor, input_value, expected_value):
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
 
 class TestStringToDate:
@@ -523,7 +496,7 @@ class TestStringToDate:
         ("2023-05-15", date(2023, 5, 15))
     ])
     def test_process_value(self, processor, input_value, expected_value):
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
 
 class TestStringToTime:
@@ -537,7 +510,7 @@ class TestStringToTime:
         ("22:45:30", time(22, 45, 30))
     ])
     def test_process_value(self, processor, input_value, expected_value):
-        assert processor.process_value(input_value) == expected_value
+        assert processor(input_value)[0] == expected_value
 
 
 class TestTakeAllTruthy:

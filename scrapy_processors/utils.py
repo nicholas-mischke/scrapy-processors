@@ -49,16 +49,10 @@ def merge_context_dicts(dict1, dict2):
     return default_loader_context
 
 
-def context_to_kwargs(context, callable, mapping=None):
+def context_to_kwargs(context, callable):
     """
     Extracts the values from the context dict that are relevant to the callable
     and returns them as a kwargs dict.
     """
     callable_args = get_func_args(callable)
-
-    # Replace context keys with callable keys
-    for callable_arg, context_arg in (mapping or {}).items():
-        if context_arg in context:
-            context[callable_arg] = context.pop(context_arg)
-
     return {key: context[key] for key in callable_args if key in context}
