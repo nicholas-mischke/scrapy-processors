@@ -79,6 +79,7 @@ def unpack_context(context, num_args: int = None) -> tuple:
         return values[:num_args]
     return values
 
+
 def context_to_kwargs(context: Dict[str, Any], callable: Callable) -> Dict[str, Any]:
     """
     Extracts the values from a context dictionary that match the arguments of a callable.

@@ -23,7 +23,7 @@ class TestProcessorMeta:
             field_2 = None
             field_3 = None
 
-            def process_value(self, value):
+            def _process_value(self, value):
                 return value
 
         return CustomProcessor
@@ -62,7 +62,7 @@ class TestProcessorMeta:
     )
     def test_processor_constructor(self, processor_cls, args, kwargs, instance_context):
         assert processor_cls(
-            *args, **kwargs).default_loader_context == instance_context
+            *args, **kwargs).default_context == instance_context
 
     @pytest.mark.parametrize(
         "args, kwargs",
@@ -85,7 +85,7 @@ class TestProcessor:
     def test_process_value(self):
         processor = Processor()
         with pytest.raises(NotImplementedError):
-            processor.process_value('value')
+            processor._process_value('value')
 
     def test_loader_context_param(self):
         processor = Processor()
@@ -96,11 +96,11 @@ class TestProcessor:
         Make sure it can call process_value with a context or without context.
         """
         class ContextSubClass(Processor):
-            def process_value(self, value, context):
+            def _process_value(self, value, context):
                 ...
 
         class ContextlessSubClass(Processor):
-            def process_value(self, value):
+            def _process_value(self, value):
                 ...
 
         context_subclass = ContextSubClass().__call__([])
@@ -113,7 +113,7 @@ class TestProcessor:
             uppercase = False
             lowercase = False
 
-            def process_value(self, value, context):
+            def _process_value(self, value, context):
                 if context.get('uppercase') is True:
                     return value.upper()
 

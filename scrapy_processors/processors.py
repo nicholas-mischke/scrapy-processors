@@ -1,12 +1,11 @@
 
 # Standard library imports
-import re
-from copy import deepcopy
-import inspect
-from inspect import Parameter, Signature
 from collections import ChainMap
+from copy import deepcopy
 from datetime import datetime, date, time
-from typing import Any, Callable, Dict, Iterable, Optional, List, Set, Tuple, TypeVar, Union
+from inspect import Parameter, Signature
+import re
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Type, TypeVar, Union
 
 # 3rd 🎉 imports
 import emoji
@@ -17,7 +16,7 @@ from price_parser import Price
 from itemloaders.utils import arg_to_iter, get_func_args
 from scrapy_processors.utils import context_to_kwargs, unpack_context
 
-from pprint import pprint
+
 
 T = TypeVar('T')  # Input type
 
@@ -26,46 +25,78 @@ class ProcessorMeta(type):
     """
     Metaclass for Processor classes.
 
-    This metaclass automatically collects class variables into the default_loader_context
+    This metaclass automatically collects class variables into the 
+    default_context attribute. When a new instance of the Processor 
+    subclass is created, the default_context is updated with the 
+    arguments passed to the class constructor.
 
-    When the class is initialized, the default_loader_context is merged with the
-    positional and keyword arguments passed to the class constructor.
+    Attributes:
+        default_context (Dict[str, Any]): The default loader context for the processor, 
+            which will be updated with instance-specific arguments upon initialization.
+
+    Example:
+    
+        class Processor(metaclass=ProcessorMeta):
+            pass
+
+        class ExampleProcessor(Processor):
+            some_arg: int = 10
+
+        print(ExampleProcessor().default_context)  # {'some_arg': 10}
+        print(ExampleProcessor(some_arg=20).default_context)  # {'some_arg': 20}
+
     """
 
-    def __new__(mcs, name, bases, attrs):
-        # Automatically collect class variables into default_loader_context
-        attrs["default_loader_context"] = {
+    def __new__(mcs: Type, name: str, bases: tuple, attrs: Dict[str, Any]) -> 'ProcessorMeta':
+        """
+        Processor subclass class attributes turned into default_context.
+        """
+        attrs["default_context"] = {
             key: value
             for key, value in attrs.items()
             if not key.startswith("__") and not callable(value)
         }
         return super().__new__(mcs, name, bases, attrs)
+    
+    def __init__(cls: Type, name: str, bases: tuple, attrs: dict):
+        """
+        Prevents Processor subclasses from defining __init__().
+        This prevents the Processor __init__() from being overridden, 
+        which is used to update the default_context.
+        """
+        if cls.__name__ != 'Processor' and '__init__' in attrs:
+            raise TypeError(
+                f"{cls.__name__} class should not define __init__().\n"
+                "It overrides the Processor __init__() which is used to update the default_context."
+            )
+        super().__init__(name, bases, attrs)
 
-    def __call__(cls, *args, **kwargs):
-
-        default_loader_context = deepcopy(cls.default_loader_context)
-        parameter_names = list(default_loader_context.keys())
-
+    def __call__(cls: Type, *args: Any, **kwargs: Any) -> Any:
+        """
+        Use the args and kwargs to update the default_context.
+        """
+        # Deepcopy the class default_context
+        default_context = deepcopy(cls.default_context)
+        
         # To check for TypeErrors, dynamically create a function signature
-        # Example:
-        #  Classname() takes 3 positional arguments but 4 were given
-        #  Classname() got multiple values for argument 'arg'
+        #  ProcessorSubClass() takes 3 positional arguments but 4 were given
+        #  ProcessorSubClass() got multiple values for argument 'arg'
         params = [
             Parameter(
-                name, 
+                name,
                 Parameter.POSITIONAL_OR_KEYWORD,
-                default=default_loader_context[name]
-            ) for name in parameter_names
+                default=default_context[name]
+            ) for name in list(default_context.keys())
         ]
         signature = Signature(params)
         bound_args = signature.bind(*args, **kwargs).arguments
-        
-        # Update the default_loader_context with the bound arguments
-        default_loader_context.update(bound_args)
-        
-        # Create the new instance
+
+        # Update the default_context with the bound arguments
+        default_context.update(bound_args)
+
+        # Create the new instance and set its default_context
         instance = super().__call__()
-        instance.default_loader_context = default_loader_context
+        instance.default_context = default_context
         return instance
 
 
@@ -73,85 +104,95 @@ class Processor(metaclass=ProcessorMeta):
     """
     A Processor class that uses an optional context to process values.
 
-    This class should be subclassed and the `process_value` method overridden
-    to provide specific data cleaning or transformation functionality that could
+    The Processor class is an abstract class that provides a structure for creating data 
+    cleaning or transformation functionalities. Each Processor subclass should define 
+    a specific data processing method in its `_process_value` function, which might
     optionally use a context.
-    >>> def process_value(value, context):
-    ...    pass
-    >>> def proess_value(value):
-    ...    pass
-    This context can be used to get kwargs for function calls, for example.
 
-    When an instance of a `Processor` subclass is called with an iterable
-    of values and an optional context, it will return a list with the result of 
-    processing each value with the context. Single items can be passed as well.
+    The `_process_value` method MUST be overridden in subclasses.
+
+    When an instance of a `Processor` subclass is invoked (called as a function) with 
+    an iterable of values and an optional context, it processes each value using the 
+    `_process_value` method and returns a list of results. Single values are also accepted 
+    and processed in the same manner.
 
     Example:
 
-    ```python
-    class ReverserProcessor(Processor):
-        def process_value(self, value: str, context: Optional[dict] = None) -> str:
-            reverse = context.get('reverse') if context is not None else False
-            return value[::-1] if reverse else value
+    import random
+
+    class ScrambleProcessor(Processor):
+        random_order = False
+        reverse = False
+    
+        def _process_value(self, value, context):
+            if context['reverse']:
+                return value[::-1]
+            elif context['random_order']:
+                return "".join(random.shuffle(list(value)))
+            else:
+                return value
 
     # Values passed as loader_context from ItemLoader
-    reverser_processor = ReverserProcessor()
-    print(reverser_processor(["hello", "world"], {'reverse': True}))  # Output: ['olleh', 'dlrow']
-    print(reverser_processor(["hello", "world"], {'reverse': False}))  # Output: ['hello', 'world']
-    print(reverser_processor(["hello", "world"]))  # Output: ['hello', 'world']
-
-    # Values passed as default_loader_context from constructor
-    reverser_processor = ReverserProcessor(reverse=True)
-    print(reverser_processor(["hello", "world"]))  # Output: ['olleh', 'dlrow']
-
-    ```
+    processor = ReverserProcessor() # {'random_order': False, 'reverse': False}
+    values = ["hello", "world"]
+    
+    print(processor(values)) # Output: ['hello', 'world']
+    print(processor(values, {'reverse': True})) # Output: ['olleh', 'dlrow']
+    print(processor(values, {'random_order': True})) # Output: ['ehllo', 'dlorw']
     """
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> Any:
         """
-        If calling directoy, default_loader_context isn't used. 
-
         Process a single value using an optional context.
 
-        This method must be overridden by subclasses.
+        This method is central to the functionality of the Processor class and should define 
+        the specific data cleaning or transformation functionality in each subclass.
 
+        Note:
+        When calling this method directly, the `default_context` is not applied.
+        
         :param value: The value to process.
-        :param context: The optional context to use when processing the value.
+        :param context: An optional context to use when processing the value. It can be a dictionary or a ChainMap.
         :return: The processed value.
+
+        :raises NotImplementedError: If the method is not implemented in a subclass.
         """
         raise NotImplementedError(
-            f"{self.__class__.__name__} has not implemented the `process_value` method. "
+            f"{self.__class__.__name__} has not implemented the `_process_value` method. "
             "This method should be overridden in all subclasses to provide the processing logic."
         )
-
+    
     # The `loader_context` parameter cannot be renamed.
     # It is used by the itemloaders package.
     def __call__(
         self,
         values: Union[T, Iterable[T]],
-        loader_context: Optional[Dict[str, Any]] = None
+        loader_context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> List[Any]:
         """
         Process a collection of values using an optional context.
 
+        This method uses the `_process_value` method to process each value and returns a list of results.
+        It's responsible for passing the context to the `_process_value` method.
+        
         :param values: An iterable of values to process.
-        :param context: The optional context to use when processing the values.
+        :param loader_context: An optional context to use when processing the values. It can be a dictionary or a ChainMap.
         :return: A list of processed values.
         """
         values = arg_to_iter(values)
 
         if loader_context:
-            context = ChainMap(loader_context, self.default_loader_context)
+            context = ChainMap(loader_context, self.default_context)
         else:
-            context = self.default_loader_context
+            context = self.default_context
 
-        if 'context' in get_func_args(self.process_value):
-            return [self.process_value(value, context) for value in values]
-        return [self.process_value(value) for value in values]
+        if 'context' in get_func_args(self._process_value):
+            return [self._process_value(value, context) for value in values]
+        return [self._process_value(value) for value in values]
 
 
 class EnsureEncoding(Processor):
@@ -177,10 +218,6 @@ class EnsureEncoding(Processor):
         result = processor(['hello', 'world'])  # passing an iterable to the instance
         # both strings in ['hello', 'world'] are now encoded in 'latin-1'
 
-        processor = EnsureEncoding('ascii', ignore_encoding_errors=False)
-        result = processor.process_value('hello world')  # calling process_value method directly
-        # 'hello world' is now encoded in 'ascii'
-
     Returns:
         str: The input string encoded with the desired encoding.
     """
@@ -189,10 +226,10 @@ class EnsureEncoding(Processor):
     encoding_errors: str = 'ignore'
     decoding_errors: str = 'strict'
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> str:
 
         encoding, encoding_errors, decoding_errors = unpack_context(context, 3)
@@ -234,9 +271,6 @@ class NormalizeWhitespace(Processor):
     Example:
         processor = NormalizeWhitespace()
         result = processor('This is a sentence !')  # passing a single string to the instance
-        print(result)  # Output: 'This is a sentence!'
-
-        result = processor.process_value('This is a sentence !')  # calling process_value method directly
         print(result)  # Output: 'This is a sentence!'
 
         processor = NormalizeWhitespace()
@@ -281,7 +315,7 @@ class NormalizeWhitespace(Processor):
         '/',  # Slash
         '_',  # Underscore
         '@',  # At sign
-        '\\',  # Backslash
+        '\\', # Backslash
         '^',  # Circumflex accent
         '~',  # Tilde
     }
@@ -301,10 +335,10 @@ class NormalizeWhitespace(Processor):
         '>',  # Greater than sign
     }
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> str:
         # Step 1) Remove zero-width spaces
         value = re.sub(r'[\u200b\ufeff]', '', value)
@@ -321,8 +355,7 @@ class NormalizeWhitespace(Processor):
         lstrip_ignore = context.get('lstrip_ignore', set())
         lstrip = lstrip.union(lstrip_add).difference(lstrip_ignore)
 
-        lstrip = re.escape(''.join(lstrip))
-        lstrip_pattern = r'\s*(?=[' + lstrip + r'])'
+        lstrip_pattern = r'\s*(?=[' + re.escape(''.join(lstrip)) + r'])'
         value = re.sub(lstrip_pattern, '', value)
 
         # Remove leading whitespaces from rstrip_punctuation
@@ -332,8 +365,7 @@ class NormalizeWhitespace(Processor):
         rstrip_ignore = context.get('rstrip_ignore', set())
         rstrip = rstrip.union(rstrip_add).difference(rstrip_ignore)
 
-        rstrip = re.escape(''.join(rstrip))
-        rstrip_pattern = r'(?<=[' + rstrip + r'])\s*'
+        rstrip_pattern = r'(?<=[' + re.escape(''.join(rstrip)) + r'])\s*'
         value = re.sub(rstrip_pattern, '', value)
 
         # Remove leading and trailing whitespaces from strip_punctuation
@@ -343,8 +375,7 @@ class NormalizeWhitespace(Processor):
         strip_ignore = context.get('strip_ignore', set())
         strip = strip.union(strip_add).difference(strip_ignore)
 
-        strip = re.escape(''.join(strip))
-        strip_pattern = r'\s*([' + strip + r'])\s*'
+        strip_pattern = r'\s*([' + re.escape(''.join(strip)) + r'])\s*'
         value = re.sub(strip_pattern, r'\1', value)
 
         # Step 4) Remove leading and trailing whitespaces
@@ -379,9 +410,6 @@ class CharWhitespacePadding(Processor):
         result = processor('7-3=4')  # passing a single string to the instance
         print(result)  # Output: '7 -  3 = 4'
 
-        result = processor.process_value('7-3=4')  # calling process_value method directly
-        print(result)  # Output: '7 -  3 = 4'
-
         processor = CharWhitespacePadding(chars=['>', '='], lpad=1, rpad=1)
         result = processor(['7*3=21', '7-3=4']) # passing a list of strings to the instance 
         print(result) # Output: ['7 * 3 = 21', '7 - 3 = 4']
@@ -391,13 +419,13 @@ class CharWhitespacePadding(Processor):
     lpad: int = 1
     rpad: int = 1
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> str:
 
-        chars, lpad, rpad = unpack_context(context)
+        chars, lpad, rpad = unpack_context(context, 3)
 
         pattern = "[" + re.escape("".join(chars)) + "]"
         return re.sub(
@@ -445,9 +473,6 @@ class NormalizeNumericString(Processor):
         result = processor('1 000 000,00')  # passing a single string to the instance
         print(result)  # Output: '1,000,000.00'
 
-        result = processor.process_value('1,000,000.00')  # calling process_value method directly
-        print(result)  # Output: '1,000,000.00'
-
         processor = NormalizeNumericString(thousands_sep='', decimal_sep='.', decimal_places=0)
         result = processor(['1,000,000.00', '2.50', '100.99'])  # passing an iterable to the instance
         print(result) # Output: ['1000000', '3', '101']
@@ -460,13 +485,14 @@ class NormalizeNumericString(Processor):
 
     input_decimal_separator: str = '.'
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> str:
-        thousands_separator, decimal_separator, decimal_places, keep_trailing_zeros, \
-            input_decimal_separator = unpack_context(context)
+        
+        thousands_separator, decimal_separator, decimal_places, \
+        keep_trailing_zeros, input_decimal_separator = unpack_context(context, 5)
 
         # The price_parser.Price object is good at detecting various number formats.
         # 1 000 000,00
@@ -521,11 +547,7 @@ class PriceParser(Processor):
         result = processor('$19.99')  # passing a single string to the instance
         print(result.amount)  # Output: 19.99
         print(result.currency)  # Output: '$'
-
-        result = processor.process_value('€9.99')  # calling process_value method directly
-        print(result.amount)  # Output: 9.99
-        print(result.currency)  # Output: '€'
-
+    
         processor = PriceParser()
         result = processor(['$19.99', '€9.99', '£49.99'])  # passing an iterable to the instance
         for price in result:
@@ -535,10 +557,10 @@ class PriceParser(Processor):
     currency_hint: Optional[str] = 'USD'
     decimal_separator: Optional[str] = '.'
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> Price:
 
         kwargs = context_to_kwargs(context, Price.fromstring)
@@ -566,15 +588,12 @@ class RemoveHTMLTags(Processor):
         result = processor('<p>Hello, world!</p>')  # passing a single string to the instance
         print(result)  # Output: 'Hello, world!'
 
-        result = processor.process_value('<div><p>Hello, world!</p></div>')  # calling process_value method directly
-        print(result)  # Output: 'Hello, world!'
-
         processor = RemoveHTMLTags()
         result = processor(['<p>Foo</p>', '<div>Bar</div>', '<span>Baz</span>'])  # passing an iterable to the instance
         print(result)  # Output: ['Foo', 'Bar', 'Baz']
     """
 
-    def process_value(self, value: str) -> str:
+    def _process_value(self, value: str) -> str:
         # from w3lib.html import remove_tags (vs BeautifulSoup)
         return BeautifulSoup(value, "html.parser").get_text()
 
@@ -600,9 +619,6 @@ class Demojize(Processor):
         result = processor('Hello, world! 😄')  # passing a single string to the instance
         print(result)  # Output: 'Hello, world! :grinning_face_with_big_eyes:'
 
-        result = processor.process_value('I love 🍕')  # calling process_value method directly
-        print(result)  # Output: 'I love :pizza:'
-
         processor = Demojize()
         result = processor(['😂', '🥰', '👍'])  # passing an iterable to the instance
         print(result)  # Output: [':face_with_tears_of_joy:', ':smiling_face_with_hearts:', ':thumbs_up:']
@@ -613,10 +629,10 @@ class Demojize(Processor):
     version: Optional[Union[str, int]] = None
     handle_version: Optional[Union[str, Callable[[str, dict], str]]] = None
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> str:
 
         kwargs = context_to_kwargs(context, emoji.demojize)
@@ -641,9 +657,6 @@ class RemoveEmojis(Processor):
         result = processor('Hello, world! 😄')  # passing a single string to the instance
         print(result)  # Output: 'Hello, world! '
 
-        result = processor.process_value('I love 🍕')  # calling process_value method directly
-        print(result)  # Output: 'I love '
-
         processor = RemoveEmojis()
         result = processor(['😂', I Llove you! '🥰', '👍'])  # passing an iterable to the instance
         print(result)  # Output: ['', 'I love you! ', '']
@@ -652,10 +665,10 @@ class RemoveEmojis(Processor):
     replace: Union[str, Callable[[str, dict], str]] = ''
     version: int = -1
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> str:
 
         kwargs = context_to_kwargs(context, emoji.replace_emoji)
@@ -677,15 +690,12 @@ class StripQuotes(Processor):
         result = processor('"Hello, world!"')  # passing a single string to the instance
         print(result)  # Output: 'Hello, world!'
 
-        result = processor.process_value('‘I love pizza’')  # calling process_value method directly
-        print(result)  # Output: 'I love pizza'
-
         processor = StripQuotes()
         result = processor(['"😂"', '‘🥰’', '“👍”'])  # passing an iterable to the instance
         print(result)  # Output: ['😂', '🥰', '👍']
     """
 
-    def process_value(self, value: str) -> str:
+    def _process_value(self, value: str) -> str:
         return re.sub(
             r'^[`ˋ‘’“”\'"'
             r'\u0060\u02CB\x91\x92\x93\x94]+'
@@ -714,9 +724,6 @@ class StringToDateTime(Processor):
         result = processor('2023-05-22, 12:30:45')  # passing a single string to the instance
         print(result)  # Output: datetime.datetime(2023, 5, 22, 12, 30, 45)
 
-        result = processor.process_value('2023-05-22, 12:30:45')  # calling process_value method directly
-        print(result)  # Output: datetime.datetime(2023, 5, 22, 12, 30, 45)
-
         processor = StringToDateTime(format='%d/%m/%Y %H:%M')
         result = processor(['22/05/2023 12:30', '23/05/2023 13:45'])  # passing a list of strings to the instance
         print(result)  # Output: [datetime.datetime(2023, 5, 22, 12, 30), datetime.datetime(2023, 5, 23, 13, 45)]
@@ -724,10 +731,10 @@ class StringToDateTime(Processor):
 
     format: str = '%Y-%m-%d, %H:%M:%S'
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> datetime:
         return datetime.strptime(value, context['format'])
 
@@ -750,9 +757,6 @@ class StringToDate(Processor):
         result = processor('2023-05-22')  # passing a single string to the instance
         print(result)  # Output: datetime.date(2023, 5, 22)
 
-        result = processor.process_value('2023-05-22')  # calling process_value method directly
-        print(result)  # Output: datetime.date(2023, 5, 22)
-
         processor = StringToDate(format='%d/%m/%Y')
         result = processor(['22/05/2023', '23/05/2023'])  # passing a list of strings to the instance
         print(result)  # Output: [datetime.date(2023, 5, 22), datetime.date(2023, 5, 23)]
@@ -760,10 +764,10 @@ class StringToDate(Processor):
 
     format: str = '%Y-%m-%d'
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> date:
         return datetime.strptime(value, context['format']).date()
 
@@ -787,9 +791,6 @@ class StringToTime(Processor):
         result = processor('14:35:20')  # passing a single string to the instance
         print(result)  # Output: datetime.time(14, 35, 20)
 
-        result = processor.process_value('14:35:20')  # calling process_value method directly
-        print(result)  # Output: datetime.time(14, 35, 20)
-
         processor = StringToTime(format='%H:%M')
         result = processor(['14:35', '18:40'])  # passing a list of strings to the instance
         print(result)  # Output: [datetime.time(14, 35), datetime.time(18, 40)]
@@ -797,10 +798,10 @@ class StringToTime(Processor):
 
     format: str = '%H:%M:%S'
 
-    def process_value(
+    def _process_value(
         self,
         value: T,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> time:
         return datetime.strptime(value, context['format']).time()
 
@@ -827,9 +828,6 @@ class TakeAllTruthy(Processor):
         processor = TakeAllTruthy(default=[1, 2, 3])
         result = processor([0, False, None, [], 'Hello', 5])  # passing an iterable to the instance
         print(result)  # Output: ['Hello', 5]
-
-        result = processor.process_value([0, False, None, [], '', {}])  # all values are falsy
-        print(result)  # Output: [1, 2, 3] (default value is used)
     """
 
     default = None
@@ -837,14 +835,14 @@ class TakeAllTruthy(Processor):
     def __call__(
         self,
         values: Union[T, Iterable[T]],
-        loader_context: Optional[Dict[str, Any]] = None
+        loader_context: Optional[Union[Dict[str, Any], ChainMap]] = None
     ) -> List[Any]:
 
         values = arg_to_iter(values)
 
         if loader_context:
-            context = ChainMap(loader_context, self.default_loader_context)
+            context = ChainMap(loader_context, self.default_context)
         else:
-            context = self.default_loader_context
+            context = self.default_context
 
         return [value for value in values if value] or context['default']
