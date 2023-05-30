@@ -15,6 +15,9 @@ itemloaders = "1.1.0"
 emoji = "2.2.0"
 price-parser = "0.3.4"
 beautifulsoup4 = "4.12.2"
+pytz = "^2023.3"
+tzlocal = "^5.0.1"
+dateparser = "^1.1.8"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -22,6 +25,7 @@ pytest = "^7.3.1"
 pytest-cov = "4.0.0"
 tox = "4.5.1"
 coverage = "7.2.5"
+scrapy = "^2.9.0"
 
 
 [build-system]

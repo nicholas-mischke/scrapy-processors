@@ -1,95 +1,108 @@
 
-from inspect import isclass
-from typing import Any, Callable, Dict, Type, Union
+# Standard library imports
+from typing import Mapping, Any
 
-import math
+from typing import Callable, Union, Type
+from functools import partial
 
 from itemloaders.utils import get_func_args
 
+from scrapy_processors.common import ProcessorType, WrappedProcessorType
 
-def get_callable(arg: Union[Callable, Type]) -> Callable:
+
+def wrap_context(processor: ProcessorType, context: Mapping[str, Any]) -> WrappedProcessorType:
     """
-    Returns a callable object given an argument.
+    Wraps a callable function to include a context dictionary as the first argument.
+    If the callable function does not accept a 'context' or 'loader_context' argument,
+    it is returned without modification.
+
+    Args:
+        context: Context dictionary to include as the first argument of the callable.
+        callable: Callable function to wrap.
+
+    Returns:
+        A new callable function that includes the context as the first argument.
+
+    Example:
+        >>> wrap_contextual_callable({'x': 1}, lambda x: x * 2)(2)
+        2
+        >>> wrap_contextual_callable({'x': 1}, lambda context, x: context['x'] * x)({'x': 2}, 3)
+        6
+    """
+    args = get_func_args(processor)
+
+    if 'context' in args:
+        return partial(processor, context=context)
+    elif 'loader_context' in args:
+        return partial(processor, loader_context=context)
+    else:
+        return processor
+
+def get_processor(potential_processor: Union[Callable, Type]) -> ProcessorType:
+    """
+    Returns a callable ProcessorType given an argument. The argument can either be a 
+    callable object or a class that once initialized becomes callable.
 
     If the argument is already callable, it's directly returned.
-    If the argument is a class, the class is initalized. If the instance has
-        a __call__ method, it's returned.
-    If the argument or instantiated class is not callable, a TypeError is raised.
+    If the argument is a class, an instance is created and if the instance has
+    a __call__ method, it's returned.
+
+    Note:
+        Ideally this would check for that the callable only accepts one or two arguments,
+        value(s) and optionally a context. Because built-in python C functions
+        cannot be inspected, this is not possible.
+
+        for example: str.upper only accepts one argument, and is a valid processor 
+        but get_func_args(str.upper) raises a TypeError.
 
     Args:
         arg: A callable object or a class.
 
     Returns:
-        Callable object derived from the input argument.
+        ProcessorType object derived from the input argument.
 
     Raises:
-        TypeError: If the argument isn't a callable or a class.
+        TypeError: If the argument or instantiated class is not callable.
+
+    Example:
+        >>> get_processor(lambda x: x + 1)(2)
+        3
+        >>> class Adder:
+        ...     def __call__(self, x):
+        ...         return x + 1
+        ...
+        >>> get_processor(Adder)(2)
+        3
     """
-    if (
-        callable(arg)
-        and not isclass(arg)  # classes need to be instantiated
-    ):
-        return arg
 
-    if isclass(arg):
-        arg = arg()
+    name = getattr(potential_processor, '__qualname__', type(potential_processor).__name__)
 
-    if hasattr(arg, '__call__'):
-        return arg.__call__
-    else:
+    if not callable(potential_processor):
         raise TypeError(
-            f"Unsupported callable type: '{type(arg).__name__}'"
+            f"{name} type cannot be used as a processor, because it's not callable."
         )
-
-
-def merge_context_dicts(dict1: Dict[str, Any], dict2: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Merges two context dictionaries, ensuring that shared keys have matching values.
-
-    Args:
-        dict1: First dictionary to merge.
-        dict2: Second dictionary to merge.
-
-    Returns:
-        A new dictionary that combines dict1 and dict2.
-
-    Raises:
-        ValueError: If shared keys between the dictionaries don't have matching values.
-    """
-    shared_keys = set(dict1.keys()) & set(dict2.keys())
-
-    error_msg = ''
-    for key in shared_keys:
-        if dict1[key] != dict2[key]:
-            error_msg += f"self[{key}]: {dict1[key]}, other[{key}]: {dict2[key]}\n"
-    if error_msg:
-        error_msg = 'Mismatched Pairs: ' + error_msg
-        raise ValueError(error_msg.strip())
-
-    # Combine default_loader_contexts
-    merged_context = dict1.copy()
-    merged_context.update(dict2)
-
-    return merged_context
-
-
-def unpack_context(context, num_args: int = None) -> tuple:
-    values = tuple(context.values())
-    if num_args is not None:
-        return values[:num_args]
-    return values
-
-
-def context_to_kwargs(context: Dict[str, Any], callable: Callable) -> Dict[str, Any]:
-    """
-    Extracts the values from a context dictionary that match the arguments of a callable.
-
-    Args:
-        context: Context dictionary with potential arguments for the callable.
-        callable: Callable function for which to extract relevant arguments.
-
-    Returns:
-        A dictionary with keys and values that match the arguments of the callable.
-    """
-    callable_args = get_func_args(callable)
-    return {key: context[key] for key in callable_args if key in context}
+    
+    # A callable object is a valid processor when it can be called with a single
+    # argument, or two arguments where the second argument is a mapping.
+    
+    # Since built-in python C functions cannot be inspected, we cannot know
+    # if they're valid processors, by simply using get_func_args().
+    
+    # If we wrap the callable with a context, we can call it with a single
+    # argument and see if it raises a TypeError. This would give a good indication
+    # if the callable is a valid processor or not.
+    
+    # However, this is not a good solution, because it's possible that the callable
+    # raises a TypeError for reasons other than the number of arguments.
+    # e.g.,
+    #   lambda x: x ** 2 raises a TypeError if x is a string, but is a valid processor.
+    #   str.upper raises a TypeError if it's called with an int, but is a valid processor.
+    
+    # A second way to check if a callable is a valid processor, is to check the error message.
+    # However, this is not a good solution either, because the error message could change
+    # in the future, and may be different depending on the python version.
+    
+    # So there's no good way to check if a callable is a valid processor,
+    # without actually calling it...
+     
+    return potential_processor
