@@ -308,7 +308,19 @@ class TestProcessorCollection:
         # Can't add a noncallable to a ProcessorCollection
         with pytest.raises(TypeError):
             reverse_processor_collection + 'not callable'
+    
+    def test__add__ValueError(
+        self, 
+        processor_collection_cls_b, 
+        reverse_processor, 
+        lower_processor
+    ):
+        first_processor = processor_collection_cls_b(reverse_processor)
+        second_processor = processor_collection_cls_b(lower_processor, a=10)
 
+        with pytest.raises(ValueError):
+            first_processor + second_processor
+        
     # append & extend are the same as __add__, so we don't need to test them
 
     def test_insert(

@@ -19,6 +19,6 @@ from scrapy_processors.json import SelectJmes
 from scrapy_processors.numeric import StringToFloat, NormalizeNumericString, PriceParser
 
 from scrapy_processors.string import (
-    EnsureEncoding, NormalizeWhitespace, CharWhitespacePadding, 
+    UnicodeEscape, NormalizeWhitespace, CharWhitespacePadding, 
     StripQuotes, RemoveHTMLTags, Demojize, RemoveEmojis
 )

@@ -5,66 +5,21 @@ import random
 from scrapy_processors.string import *
 
 
-class TestEnsureEncoding:
+class TestUnicodeEscape:
+
+    @pytest.fixture
+    def processor(self):
+        return UnicodeEscape()
 
     # English, Japanese & Russian strings in UTF-8, UTF-16, ASCII & Latin-1
-    @pytest.mark.parametrize("input_value, expected_value, encoding, encoding_errors", [
-        # UTF-8 (Default encoding), English
-        ("I Love Python", "I Love Python", "utf-8", "ignore"),
-
-        # UTF-8 (Default encoding), Japanese
-        ("日本語が大好きです", "日本語が大好きです", "utf-8", "ignore"),
-
-        # UTF-8 (Default encoding), Russian
-        ("Я люблю Python", "Я люблю Python", "utf-8", "ignore"),
-
-        # UTF-16 (Default encoding), English
-        ("I Love Python", "I Love Python", "utf-16", "ignore"),
-
-        # UTF-16 (Default encoding), Japanese
-        ("日本語が大好きです", "日本語が大好きです", "utf-16", "ignore"),
-
-        # UTF-16 (Default encoding), Russian
-        ("Я люблю Python", "Я люблю Python", "utf-16", "ignore"),
-
-        # ASCII (Default encoding), English
-        ("I Love Python", "I Love Python", "ascii", "ignore"),
-
-        # ASCII (Default encoding), Japanese (Raises UnicodeEncodeError)
-        ("日本語が大好きです", "ascii cannot encode", "ascii", "strict"),
-
-        # ASCII (Default encoding), Russian (Raises UnicodeEncodeError)
-        ("Я люблю Python", "ascii cannot encode", "ascii", "strict"),
-
-        # Latin-1 (Default encoding), English
-        ("I Love Python", "I Love Python", "latin-1", "ignore"),
-
-        # Latin-1 (Default encoding), Japanese (Raises UnicodeEncodeError)
-        ("日本語が大好きです", "latin-1 cannot encode", "latin-1", "strict"),
-
-        # Latin-1 (Default encoding), Russian (Raises UnicodeEncodeError)
-        ("Я люблю Python", "latin-1 cannot encode", "latin-1", "strict"),
-    ])
-    def test_process_value(self, input_value, expected_value, encoding, encoding_errors):
-        processor = EnsureEncoding(encoding, encoding_errors)
-
-        if expected_value.endswith("cannot encode"):
-            with pytest.raises(UnicodeEncodeError):
-                processor(input_value)
-        else:
-            assert processor(input_value)[0] == expected_value
-
-    def test_with_loader_context(self):
-        string = "Hello, World! 👋🌍 ä"
-        processor = EnsureEncoding('utf-16')
-        assert processor(string)[0] == string
-
-        with pytest.raises(UnicodeEncodeError):
-            processor(
-                string,
-                {'encoding': 'ascii', 'encoding_errors': 'strict',
-                    'decoding_errors': 'strict'}
-            )
+    @pytest.mark.parametrize("input_value, expected_output",
+        [
+            # Escape newlines, tabs, etc.
+            ("Escape\\n\\n\\t\\tCharacters", "Escape\n\n\t\tCharacters")
+        ]
+    )
+    def test(self, processor, input_value, expected_output):
+        assert processor.process_value(input_value) == expected_output
 
 
 class TestNormalizeWhitespace:

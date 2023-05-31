@@ -1,14 +1,12 @@
 
-from typing import Any, Tuple, Iterable, Union, Optional, Mapping, List
-from pathlib import Path
+# Standard library imports
+from typing import Any, List, Mapping, Optional, Union
 
-from itemloaders.processors import Identity
-
-from scrapy_processors import common
-from scrapy_processors.common import V
-from scrapy_processors.base import Processor
-
+# 3rd 🎉 imports
 import jmespath
+
+# Local application/library specific imports
+from scrapy_processors.base import Processor
 
 
 class SelectJmes(Processor):
@@ -18,14 +16,12 @@ class SelectJmes(Processor):
     """
 
     search_string: str = None
-    
+
     def process_value(
-        self, 
+        self,
         value: Union[Mapping[str, Any], List[Mapping[str, Any]]],
         context: Optional[Mapping[str, Any]] = None
-    )-> Any:
+    ) -> Any:
 
         search_string = self.unpack_context(context)
         return jmespath.search(search_string, value)
-
-

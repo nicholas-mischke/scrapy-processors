@@ -1,12 +1,14 @@
 
-from typing import Any, Tuple, Iterable, Optional, Mapping, List
+# Standard library imports
+from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
+# itemloaders imports
 from itemloaders.processors import Identity
 
-from scrapy_processors import common
-from scrapy_processors.common import V
+# Local application/library specific imports
 from scrapy_processors.base import Processor
-
+from scrapy_processors.common import falsey_values
+from scrapy_processors.common import V
 
 
 class TakeAll(Identity):
@@ -42,7 +44,7 @@ class TakeAllTruthy(Processor):
     """
 
     default: Any = None  # value to return if all values are falsey
-    falsey: Tuple[Any] = common.falsey_values
+    falsey: Tuple[Any] = falsey_values
 
     def __call__(
         self,
@@ -59,11 +61,10 @@ class TakeAllTruthy(Processor):
 class TakeFirstTruthy(Processor):
     """
     A TakeFirst processor that returns the first truthy value.
-    conextual
     """
 
     default: Any = None  # value to return if all values are falsey
-    falsey: Tuple[Any] = common.falsey_values
+    falsey: Tuple[Any] = falsey_values
 
     def __call__(
         self,
@@ -81,6 +82,10 @@ class TakeFirstTruthy(Processor):
 
 
 class Join(Processor):
+    """
+    Given an iterable of values, return a string of the values joined by a separator.
+    Elements of the iterable must be strings or have a __str__ method defined.
+    """
 
     separator: str = ' '
 

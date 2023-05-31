@@ -1,0 +1,40 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dirty Data</title>
+</head>
+<body>
+    <div id="div-dates">
+        <!-- ISO 8601 Format -->
+        <!-- '%Y-%m-%d, %H:%M:%S' -->
+        <p id="iso-8601-datetime-1">2016-02-03, 17:04:27</p>
+        <p id="iso-8601-datetime-2">2019-12-23, 02:04:18</p>
+        <!-- Day Month Year Hour Minute Second Timezone -->
+        <!-- '%A, %B %d, %Y %p' -->
+        <p id="datetime-context">Friday, December 25, 1992 12PM</p>
+    </div>
+    <div id="div-numeric-formatting">
+        <p id="num-1">1 000,00</p>
+        <p id="num-2">100.00101</p>
+        <p id="price">¥1,500.50</p>
+    </div>
+    <div id="div-strings">
+        <p id="dirty-string">  "" This Really    
+            \n\n\n\n
+            is a         \t\t\t\t            messy string  !!!   "</p>
+    </div>
+    <div id="div-json">
+        <p id="json-1">{
+            "foo": "This is some foo content.",
+            "bar": {
+                "sub_bar1": "This is the first sub-bar under bar.",
+                "sub_bar2": "This is the second sub-bar under bar."
+            },
+            "baz": ["item1", "item2", "item3"],
+            "name": "  \njoHn DOE\"\"  \t\t\t  \n\n\n\n"
+        }
+        </p>
+    </div>
+</body>
+</html>

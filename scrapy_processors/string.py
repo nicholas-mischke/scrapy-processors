@@ -1,16 +1,19 @@
 
-from typing import Any, Tuple, Iterable, Optional, Set, Union, Callable, Mapping
+# Standard library imports
+from typing import Any, Callable, Iterable, Mapping, Optional, Set, Tuple, Union
 import re
 
+# 3rd 🎉 imports
 from bs4 import BeautifulSoup
 import emoji
 
-
+# itemloaders imports
 from itemloaders.utils import arg_to_iter
 
-
-from scrapy_processors.common import V
+# Local application/library specific imports
 from scrapy_processors.base import Processor
+from scrapy_processors.common import V
+from scrapy_processors.utils import to_sets
 
 
 def regex_chars(
@@ -24,8 +27,6 @@ def regex_chars(
         chars (Union[str, Iterable[str]]): A string or iterable of strings.
         escape (bool): Whether to escape the characters. 
             Default is True.
-        flags (int): Flags to pass to the regex. 
-            Default is re.UNICODE.
 
     Returns:
         str: A regex character class.
@@ -35,51 +36,50 @@ def regex_chars(
     return r"[{}]".format(''.join(chars))
 
 
-class EnsureEncoding(Processor):
+class UnicodeEscape(Processor):
     """
-    Processor to ensure a specific string encoding.
+    Processor to encode and decode strings, converting escape sequences into their respective characters.
 
-    Given a string, it returns a string with the specified encoding. 
+    This class takes a string input and returns it with escape sequences such as '\\n', '\\t', etc. 
+    converted to their corresponding characters.
 
     Args:
-        encoding (str): The desired encoding. 
-            Default is 'utf-8'.
-        ignore_encoding_errors (bool): Whether to ignore encoding errors. 
-            If True, errors will be ignored.
-            If False, encoding errors raise a UnicodeError. 
-            Default is True.
+        encoding (str): The string encoding format. Default is 'utf-8'.
+        encoding_errors (str): The policy for encoding errors. 
+            If set to 'ignore', errors will be ignored.
+            If set to 'strict', encoding errors raise a UnicodeError. 
+            Default is 'ignore'.
+        decoding (str): The decoding format. Default is 'unicode_escape'.
+        decoding_errors (str): The policy for decoding errors.
+            Default is 'ignore'.
 
     Example:
-        processor = EnsureEncoding('utf-16')
-        result = processor('hello world')  # passing a single string to the instance
-        # 'hello world' is now encoded in 'utf-16'
-
-        processor = EnsureEncoding('latin-1')
-        result = processor(['hello', 'world'])  # passing an iterable to the instance
-        # both strings in ['hello', 'world'] are now encoded in 'latin-1'
+        processor = UnicodeEscape()
+        result = processor('hello\\nworld')  # passing a string to the instance
+        # 'hello\\nworld' is now 'hello\nworld'
 
     Returns:
-        str: The input string encoded with the desired encoding.
+        str: The input string with escape sequences converted to respective characters.
     """
 
     encoding: str = 'utf-8'
     encoding_errors: str = 'ignore'
-    decoding_errors: str = 'strict'
+
+    decoding: str = 'unicode_escape'
+    decoding_errors: str = 'ignore'
 
     def process_value(
         self,
         value: V,
         context: Optional[Mapping[str, Any]] = None
     ) -> str:
+        context = self.unpack_context(context)
 
-        encoding, encoding_errors, decoding_errors \
-            = self.unpack_context(context)
+        encoding, encoding_errors = context[:2]
+        bytes = str(value).encode(encoding, encoding_errors)
 
-        incoming_string = str(value)
-        bytes = incoming_string.encode(encoding, encoding_errors)
-        outgoing_string = bytes.decode(encoding, decoding_errors)
-
-        return outgoing_string
+        decoding, decoding_errors = context[2:]
+        return bytes.decode(decoding, decoding_errors)
 
 
 class NormalizeWhitespace(Processor):
@@ -203,24 +203,21 @@ class NormalizeWhitespace(Processor):
 
         # Remove trailing whitespaces from lstrip_punctuation
         # "This is a sentence !" --> "This is a sentence!"
-        lstrip, add, ignore = context[:3]
-        lstrip, add, ignore = set(lstrip), set(add), set(ignore)
+        lstrip, add, ignore = to_sets(*context[:3])
         chars = lstrip.union(add).difference(ignore)
         pattern = r'\s*(?=' + regex_chars(chars) + r')'
         value = re.sub(pattern, '', value)
 
         # Remove leading whitespaces from rstrip_punctuation
         # "$ 100" --> "$100"
-        rstrip, add, ignore = context[3:6]
-        rstrip, add, ignore = set(rstrip), set(add), set(ignore)
+        rstrip, add, ignore = to_sets(*context[3:6])
         chars = rstrip.union(add).difference(ignore)
         pattern = r'(?<=' + regex_chars(chars) + r')\s*'
         value = re.sub(pattern, '', value)
 
         # Remove leading and trailing whitespaces from strip_punctuation
         # "Sandwitch - The - Hyphens" --> "Sandwitch-The-Hyphens"
-        strip, add, ignore = context[6:9]
-        rstrip, add, ignore = set(strip), set(add), set(ignore)
+        strip, add, ignore = to_sets(*context[6:9])
         chars = strip.union(add).difference(ignore)
         pattern = r'\s*(' + regex_chars(chars) + r')\s*'
         value = re.sub(pattern, r'\1', value)
@@ -351,14 +348,10 @@ class StripQuotes(Processor):
 
         context = self.unpack_context(context)
 
-        quotes, quotes_add, quotes_ignore = context[:3]
-        quotes, quotes_add, quotes_ignore = set(quotes), set(quotes_add), set(quotes_ignore)
-        
-        ticks, ticks_add, ticks_ignore = context[3:6]
-        ticks, ticks_add, ticks_ignore = set(ticks), set(ticks_add), set(ticks_ignore)
-        
-        symbols_ignore = context[6]
-        symbols_ignore = set(symbols_ignore)
+        quotes, quotes_add, quotes_ignore = to_sets(*context[:3])
+        ticks, ticks_add, ticks_ignore    = to_sets(*context[3:6])
+
+        symbols_ignore = to_sets(*context[6])
 
         quotes = quotes.union(quotes_add).difference(quotes_ignore)
         ticks = ticks.union(ticks_add).difference(ticks_ignore)
@@ -479,3 +472,5 @@ class RemoveEmojis(Processor):
 
         kwargs = self.context_to_kwargs(context, emoji.replace_emoji)
         return emoji.replace_emoji(value, **kwargs)
+
+

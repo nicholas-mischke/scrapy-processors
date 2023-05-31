@@ -2,17 +2,17 @@
 # Standard library imports
 from collections import ChainMap
 from copy import deepcopy
-import inspect
 from functools import wraps
+import inspect
 from inspect import Parameter, Signature
-from typing import Any, Callable, Dict, Iterable, List, Optional, Type, Union, Tuple, TypeVar, Mapping
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Type, Tuple, Union
 
 # itemloaders imports
 from itemloaders.utils import arg_to_iter, get_func_args
 
-# scrapy_processors imports
-from scrapy_processors.common import V, ProcessorType, ProcessorCollectionType
-from scrapy_processors.utils import get_processor, wrap_context
+# Local application/library specific imports
+from scrapy_processors.common import ProcessorCollectionType, ProcessorType, V
+from scrapy_processors.utils import get_processor, merge_contexts, wrap_context
 
 
 def iter_values_decorator(method: Callable[..., Any]) -> Callable[..., Any]:
@@ -24,7 +24,7 @@ def iter_values_decorator(method: Callable[..., Any]) -> Callable[..., Any]:
     :param method: The method to decorate.
     :return: The decorated method.
     """
-    
+
     signature = inspect.signature(method)
 
     @wraps(method)
@@ -33,12 +33,12 @@ def iter_values_decorator(method: Callable[..., Any]) -> Callable[..., Any]:
         bound = signature.bind(self, *args, **kwargs)
         bound.apply_defaults()
         kwargs = bound.arguments
-        
+
         if 'value' in kwargs:
             kwargs['value'] = arg_to_iter(kwargs['value'])
         elif 'values' in kwargs:
             kwargs['values'] = arg_to_iter(kwargs['values'])
-        
+
         return method(**kwargs)
 
     return wrapper
@@ -46,8 +46,8 @@ def iter_values_decorator(method: Callable[..., Any]) -> Callable[..., Any]:
 
 def chainmap_context_decorator(method: Callable[..., Any]) -> Callable[..., Any]:
     """
-    Decorator to ensure the context is always a ChainMap, where loader_context takes priority
-    over default_context.
+    Decorator to ensure the context is always a ChainMap, where loader_context 
+    / context takes priority over default_context.
 
     :param method: The method to decorate.
     :return: The decorated method.
@@ -57,11 +57,11 @@ def chainmap_context_decorator(method: Callable[..., Any]) -> Callable[..., Any]
 
     @wraps(method)
     def wrapper(self, *args, **kwargs) -> Callable[..., Any]:
-    
+
         bound = signature.bind(self, *args, **kwargs)
         bound.apply_defaults()
         kwargs = bound.arguments
-        
+
         if 'context' in kwargs:
             context = kwargs.get('context', None)
 
@@ -72,18 +72,22 @@ def chainmap_context_decorator(method: Callable[..., Any]) -> Callable[..., Any]
 
         if 'loader_context' in kwargs:
             loader_context = kwargs.get('loader_context', None)
-            
+
             if loader_context is None:
                 kwargs['loader_context'] = ChainMap(self.default_context)
             else:
-                kwargs['loader_context'] = ChainMap(loader_context, self.default_context)
-        
+                kwargs['loader_context'] = ChainMap(
+                    loader_context, self.default_context)
+
         return method(**kwargs)
 
     return wrapper
 
 
 def iter_values_chainmap_context_decorator(method: Callable[..., Any]) -> Callable[..., Any]:
+    """
+    Wrapper for iter_values_decorator and chainmap_context_decorator.
+    """
     return iter_values_decorator(chainmap_context_decorator(method))
 
 
@@ -94,7 +98,22 @@ class ProcessorMeta(type):
     This metaclass automatically collects class variables into the 
     default_context attribute. When a new instance of the Processor 
     subclass is created, the default_context is updated with the 
-    arguments passed to the class constructor.
+    arguments passed to the class constructor. An __init__() method
+    isn't allowed on the Processor subclass, as it would override the
+    metaclass's functionality.
+
+    __call__() is decorated with iter_values_chainmap_context_decorator,
+    which ensures that the context is always a ChainMap, where loader_context
+    takes priority over default_context. It also ensures that the
+    values parameter is always an iterable.
+
+    __call__() is checked for a context or loader_context parameter. If context
+    is present, an exception is raised as the itemloaders package looks specifically
+    for loader_context, for a number of internal processes.
+
+    process_value() is decorated with chainmap_context_decorator, which
+    ensures that the context is always a ChainMap, where context
+    takes priority over default_context.
 
     Attributes:
         default_context (Dict[str, Any]): The default loader context for the processor, 
@@ -110,7 +129,6 @@ class ProcessorMeta(type):
 
         print(ExampleProcessor().default_context)  # {'some_arg': 10}
         print(ExampleProcessor(some_arg=20).default_context)  # {'some_arg': 20}
-
     """
 
     def __new__(mcs: Type, name: str, bases: tuple, attrs: Dict[str, Any]) -> 'ProcessorMeta':
@@ -192,6 +210,39 @@ class ProcessorMeta(type):
 
 
 class ProcessorCollectionMeta(type):
+    """
+    Metaclass for ProcessorCollection classes.
+
+    This metaclass automatically collects class variables into the 
+    default_context attribute. When a new instance of the ProcessorCollection 
+    subclass is created, the default_context is updated with the 
+    arguments passed as kwargs to the class constructor. 
+
+    Arguments passed as args to the constructor are used as the processors
+
+    An __init__() method isn't allowed on the Processor subclass, as it would 
+    override the metaclass's functionality.
+
+    __call__() is checked for a context or loader_context parameter. If context
+    is present, an exception is raised as the itemloaders package looks specifically
+    for loader_context, for a number of internal processes.
+
+    Attributes:
+        default_context (Dict[str, Any]): The default loader context for the processor, 
+            which will be updated with instance-specific arguments upon initialization.
+
+    Example:
+
+        class Processor(metaclass=ProcessorMeta):
+            pass
+
+        class ExampleProcessor(Processor):
+            some_arg: int = 10
+
+        print(ExampleProcessor().default_context)  # {'some_arg': 10}
+        print(ExampleProcessor(some_arg=20).default_context)  # {'some_arg': 20}
+
+    """
 
     def __new__(mcs, name, bases, attrs):
         attrs["default_context"] = {
@@ -222,7 +273,7 @@ class ProcessorCollectionMeta(type):
         super().__init__(name, bases, attrs)
 
     def __call__(cls, *processors, **instance_default_context):
-        
+
         # Make sure at least one processor is passed
         if not processors:
             raise TypeError(
@@ -243,13 +294,26 @@ class ProcessorCollectionMeta(type):
 
 
 class ContextMixin:
+    """
+    Supplies one property for cls_name. cls_name is chosen over name, 
+    since `name` seems more likely to be a class variable for default_context
+
+    unpack_context() is a convenience method for unpacking the context into a
+    dictionary with optional additional keys. This helps eliminate the 
+    keys that are not relevant to the processor. Automatically uses
+    default_context Chained with the context passed to the method.
+
+    context_to_kwargs() is a convenience method for converting the context
+    into kwargs for functions that are used within process_value.
+    This helps eliminate the keys that are not relevant to the function.
+    """
 
     @property
     def cls_name(self):
         """
-        The name of the processor collection.
+        The name of the processor subclass.
 
-        :return: The name of the processor collection.
+        :return: The name of the processor subclass. 
         """
         return self.__class__.__name__
 
@@ -307,14 +371,14 @@ class Processor(ContextMixin, metaclass=ProcessorMeta):
 
     The Processor class is an abstract class that provides a structure for creating data 
     cleaning or transformation functionalities. Each Processor subclass should define 
-    a specific data processing method in its `_process_value` function, which might
+    a specific data processing method in its `process_value` method, which might
     optionally use a context.
 
-    The `_process_value` method MUST be overridden in subclasses.
+    The `process_value` method MUST be overridden in subclasses.
 
     When an instance of a `Processor` subclass is invoked (called as a function) with 
     an iterable of values and an optional context, it processes each value using the 
-    `_process_value` method and returns a list of results. Single values are also accepted 
+    `process_value` method and returns a list of results. Single values are also accepted 
     and processed in the same manner.
 
     Example:
@@ -354,9 +418,6 @@ class Processor(ContextMixin, metaclass=ProcessorMeta):
         This method is central to the functionality of the Processor class and should define 
         the specific data cleaning or transformation functionality in each subclass.
 
-        Note:
-        When calling this method directly, the `default_context` is not applied.
-
         :param value: The value to process.
         :param context: An optional context to use when processing the value. It can be a dictionary or a ChainMap.
         :return: The processed value.
@@ -379,8 +440,8 @@ class Processor(ContextMixin, metaclass=ProcessorMeta):
         """
         Process a collection of values using an optional context.
 
-        This method uses the `_process_value` method to process each value and returns a list of results.
-        It's responsible for passing the context to the `_process_value` method.
+        This method uses the `process_value` method to process each value and returns a list of results.
+        It's responsible for passing the context to the `process_value` method.
 
         :param values: An iterable of values to process. If a single value is 
                        provided, it is converted into an iterable.
@@ -411,6 +472,10 @@ class Processor(ContextMixin, metaclass=ProcessorMeta):
 
 
 class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
+    """
+    Contains a collection of processors which are called sequentially 
+    when the ProcessorCollection instance is called as a function.
+    """
 
     def __call__(self):
         raise NotImplementedError(
@@ -420,49 +485,22 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
 
     def __add__(self, other: Union[Callable, Iterable[Callable]]) -> ProcessorCollectionType:
         """
-        Adds another Compose object, a callable, or a collection of processors 
-        to the current Compose instance, and returns a new Compose instance.
+        Takes the current ProcessorCollection instance's processors, add either
+        another instance's processors, a single processor, or a collection of processors,
+        to the tuple of processors and initalizes a new ProcessorCollection instance.
 
-        If `other` is not a Compose instance, it attempts to convert it into a 
-        Compose instance before addition. If this conversion is not possible, 
-        a TypeError is raised.
-
-        During the addition, if the `default_loader_contexts` of the two Compose 
-        objects have different values for shared keys a ValueError is raised.
+        If adding two ProcessorCollection instances, the `default_contexts` of the two
+        must match.
 
         Args:
-            other: Another Compose instance, a callable, or a collection of processors.
+            other: Another ProcessorCollection instance, a callable, or a collection of processors.
 
         Returns:
-            Compose: A new Compose instance resulting from the addition.
+            ProcessorCollection: A new ProcessorCollection instance resulting from the addition.
 
         Raises:
-            TypeError: If `other` cannot be converted to a Compose instance.
-            ValueError: If the `default_loader_contexts` of the two Compose objects do not match.
-
-        Example:
-            To demonstrate addition of Compose objects:
-
-            >>> compose_1 = Compose(sum)
-            >>> compose_2 = Compose(lambda x: [x * 2])
-            >>> compose_3 = compose_1 + compose_2
-            >>> compose_3([1, 2, 3, 4, 5])
-            [30]
-
-            To add a single callable function to a Compose instance:
-
-            >>> compose_1 = Compose(sum)
-            >>> compose_2 = compose_1 + (lambda x: [x * 2])
-            >>> compose_2([1, 2, 3, 4, 5])
-            [30]
-
-            To add a collection of processors to a Compose instance:
-
-            >>> processors = [sum, lambda x: [x * 2]]
-            >>> compose_1 = Compose(min, lambda x: [x])
-            >>> compose_2 = compose_1 + processors
-            >>> compose_2([1, 2, 3, 4, 5])
-            [2]
+            TypeError: If `other` cannot be converted to a ProcessorCollection instance.
+            ValueError: If the `default_contexts` of the two ProcessorCollection objects do not match.
         """
 
         if (
@@ -494,25 +532,38 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
                 )
 
             processors = self.processors + tuple(processors)
-            return type(self)(*processors)
+
+            # Make sure default_context is the same
+            try:
+                default_context_other = other.default_context
+            except AttributeError:
+                default_context_other = {}
+
+            return type(self)(
+                *processors,
+                **merge_contexts(self.default_context, default_context_other)
+            )
         else:
-            return type(self)(*self.processors + other.processors)
+            return type(self)(
+                *self.processors + other.processors,
+                **merge_contexts(self.default_context, other.default_context)
+            )
 
     def append(self, processor) -> ProcessorCollectionType:
         """
-        Similar to __add__ but returns a new instance instead of mutating.
+        Similar to list append but returns a new instance instead of mutating
         """
         return self + processor
 
     def extend(self, processors) -> ProcessorCollectionType:
         """
-        Similar to __add__ but returns a new instance instead of mutating.
+        Similar to list extend but returns a new instance instead of mutating
         """
         return self + processors
 
     def insert(self, index, processor) -> ProcessorCollectionType:
         """
-        similar to __setitem__ but returns a new instance instead of mutating
+        similar to list insert but returns a new instance instead of mutating
         """
         processors = list(self.processors)
         processors.insert(index, get_processor(processor))
@@ -535,12 +586,12 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
         """
         processors = list(self.processors)
         del processors[index]
-        
+
         if not processors:
             raise IndexError(
                 f"{self.cls_name}() must keep at least one processor."
             )
-        
+
         return type(self)(*processors)
 
     def __contains__(self, processor) -> bool:
@@ -550,7 +601,7 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
         return len(self.processors)
 
     def __str__(self) -> str:
-        
+
         def processor_to_str(processor):
             if isinstance(processor, (Processor, ProcessorCollection)):
                 return str(processor)
@@ -560,11 +611,11 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
                 if '<lambda>' in name:
                     return name.split('.')[0]
                 return name
-        
+
         processor_str = ', '.join([
             processor_to_str(processor) for processor in self.processors
         ])
-        
+
         return f"{self.cls_name}({processor_str})"
 
     def __eq__(self, other) -> bool:

@@ -1,16 +1,17 @@
 
+# Standard library imports
 from datetime import datetime, date, time
-from typing import Any, Optional, List, Dict, Callable, Mapping, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
+# 3rd 🎉 imports
+import dateparser
+from dateparser.conf import Settings
 import pytz
 from tzlocal import get_localzone
 
-import dateparser
-from dateparser.conf import Settings
-
-from scrapy_processors.common import V
-
+# Local application/library specific imports
 from scrapy_processors.base import Processor
+from scrapy_processors.common import V
 
 
 class StringToDateTimeExtraordinaire(Processor):

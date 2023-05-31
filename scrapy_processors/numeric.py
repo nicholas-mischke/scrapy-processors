@@ -1,29 +1,35 @@
 
+# Standard library imports
 from typing import Any, Optional, Mapping
 
+# 3rd 🎉 imports
 from price_parser import Price
 
-from scrapy_processors.common import V
+# Local application/library specific imports
 from scrapy_processors.base import Processor
+from scrapy_processors.common import V
 
 
 class StringToFloat(Processor):
+    """
+    Convert a string to a float.
+    """
 
     decimal_places: Optional[int] = None
     input_decimal_separator: Optional[str] = None
-    
+
     def process_value(
-        self, 
-        value: V, 
+        self,
+        value: V,
         context: Optional[Mapping[str, Any]] = None
     ) -> Any:
         decimal_places, input_decimal_separator = self.unpack_context(context)
-        
+
         num = Price.fromstring(
             value,
             decimal_separator=input_decimal_separator
         ).amount_float
-        
+
         return round(num, decimal_places) if decimal_places else num
 
 

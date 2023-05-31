@@ -79,3 +79,21 @@ class test_get_processor:
             result = get_processor(not_a_processor)
 
         assert "cannot be used as a processor, because it's not callable." in str(error.value)
+
+
+class test_merge_contexts:
+    
+    def test(self):
+        context = {'x': 1, 'y': 2}
+        loader_context = {'y': 2, 'z': 4}
+
+        assert merge_contexts(context, loader_context) == {'x': 1, 'y': 2, 'z': 4}
+    
+    def test_ValueError(self):
+        context = {'x': 1, 'y': 2}
+        loader_context = {'y': 3, 'z': 4}
+
+        with pytest.raises(ValueError) as error:
+            result = merge_contexts(context, loader_context)
+
+        assert "Contexts contain different values for the same keys: ['y']" in str(error.value)
