@@ -25,7 +25,7 @@ def regex_chars(
 
     Args:
         chars (Union[str, Iterable[str]]): A string or iterable of strings.
-        escape (bool): Whether to escape the characters. 
+        escape (bool): Whether to escape the characters.
             Default is True.
 
     Returns:
@@ -40,14 +40,14 @@ class UnicodeEscape(Processor):
     """
     Processor to encode and decode strings, converting escape sequences into their respective characters.
 
-    This class takes a string input and returns it with escape sequences such as '\\n', '\\t', etc. 
+    This class takes a string input and returns it with escape sequences such as '\\n', '\\t', etc.
     converted to their corresponding characters.
 
     Args:
         encoding (str): The string encoding format. Default is 'utf-8'.
-        encoding_errors (str): The policy for encoding errors. 
+        encoding_errors (str): The policy for encoding errors.
             If set to 'ignore', errors will be ignored.
-            If set to 'strict', encoding errors raise a UnicodeError. 
+            If set to 'strict', encoding errors raise a UnicodeError.
             Default is 'ignore'.
         decoding (str): The decoding format. Default is 'unicode_escape'.
         decoding_errors (str): The policy for decoding errors.
@@ -63,10 +63,10 @@ class UnicodeEscape(Processor):
     """
 
     encoding: str = 'utf-8'
-    encoding_errors: str = 'ignore'
+    encoding_errors: str = "backslashreplace"
 
     decoding: str = 'unicode_escape'
-    decoding_errors: str = 'ignore'
+    decoding_errors: str = 'strict'
 
     def process_value(
         self,
@@ -87,7 +87,7 @@ class NormalizeWhitespace(Processor):
     Processor to normalize whitespace in a string.
 
     This class takes a string and returns a new string in which all contiguous
-    whitespace characters are replaced with a single space. It can be called with a 
+    whitespace characters are replaced with a single space. It can be called with a
     single value or an iterable of values.
 
     The normalization process includes four steps:
@@ -96,13 +96,13 @@ class NormalizeWhitespace(Processor):
         3) Normalize whitespace around punctuation marks
         4) Remove leading and trailing whitespaces
 
-    The processor is typically not fully appropriate for numerical strings. 
-    This is because in sentences, commas and periods are typically followed by 
-    a space, while in numbers, they are not. Consider combining this processor 
+    The processor is typically not fully appropriate for numerical strings.
+    This is because in sentences, commas and periods are typically followed by
+    a space, while in numbers, they are not. Consider combining this processor
     with NormalizeNumericString, inside a MapCompose processor.
 
     Args:
-        lstrip_punctuation (tuple): A tuple of punctuation characters that should not have whitespace to their left. 
+        lstrip_punctuation (tuple): A tuple of punctuation characters that should not have whitespace to their left.
         rstrip_punctuation (tuple): A tuple of punctuation characters that should not have whitespace to their right.
         strip_punctuation (tuple): A tuple of punctuation characters that should not have whitespace on either side.
 
@@ -230,11 +230,11 @@ class CharWhitespacePadding(Processor):
     """
     Processor that takes a string and adds padding around specific characters.
 
-    This class is useful for numeric expressions (e.g. "1 > 2", "7 - 3 = 4") where 
+    This class is useful for numeric expressions (e.g. "1 > 2", "7 - 3 = 4") where
     padding around operators enhances readability.
 
-    Note: 
-    The NormalizeWhitespace processor may remove spaces around hyphens, if 
+    Note:
+    The NormalizeWhitespace processor may remove spaces around hyphens, if
     a hypen is a char in the strip_punctuation tuple for the constructor of that
     class.
 
@@ -255,7 +255,7 @@ class CharWhitespacePadding(Processor):
         print(result)  # Output: '7 -  3 = 4'
 
         processor = CharWhitespacePadding(chars=['>', '='], lpad=1, rpad=1)
-        result = processor(['7*3=21', '7-3=4']) # passing a list of strings to the instance 
+        result = processor(['7*3=21', '7-3=4']) # passing a list of strings to the instance
         print(result) # Output: ['7 * 3 = 21', '7 - 3 = 4']
     """
 
@@ -351,10 +351,9 @@ class StripQuotes(Processor):
         quotes, quotes_add, quotes_ignore = to_sets(*context[:3])
         ticks, ticks_add, ticks_ignore    = to_sets(*context[3:6])
 
-        symbols_ignore = to_sets(*context[6])
-
         quotes = quotes.union(quotes_add).difference(quotes_ignore)
         ticks = ticks.union(ticks_add).difference(ticks_ignore)
+        symbols_ignore = to_sets(*context[6])
 
         chars = quotes.union(ticks).difference(symbols_ignore)
         chars = regex_chars(chars)
@@ -370,9 +369,9 @@ class RemoveHTMLTags(Processor):
     """
     Processor that removes all HTML tags from a string.
 
-    This processor is useful when you have text data embedded in HTML and you want to 
-    extract only the text content. The BeautifulSoup library is used to parse and 
-    remove the HTML tags. 
+    This processor is useful when you have text data embedded in HTML and you want to
+    extract only the text content. The BeautifulSoup library is used to parse and
+    remove the HTML tags.
 
     Note: This processor does not remove the content inside the HTML tags.
 
@@ -401,7 +400,7 @@ class Demojize(Processor):
     """
     Processor that replaces Unicode emojis in a string with their respective shortcodes.
 
-    Emoji shortcodes are more storage-friendly and also make it easier to understand 
+    Emoji shortcodes are more storage-friendly and also make it easier to understand
     the meaning of an emoji across different platforms.
 
     This processor uses the `emoji` library to convert Unicode emojis into shortcodes.

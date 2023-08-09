@@ -5,11 +5,13 @@
 [![Python Versions](https://img.shields.io/badge/Python-3.7%20%7C%203.8%20%7C%203.9%20%7C%203.10%20%7C%203.11-blue)](https://www.python.org/)
 <!-- [![codecov](https://codecov.io/gh/nicholas-mischke/scrapy-processors/branch/master/graph/badge.svg)](https://codecov.io/gh/nicholas-mischke/scrapy-processors) -->
 
+Scrapy Processors is a collection of Processor classes meant to work with
+the [itemloaders](https://pypi.org/project/itemloaders/) package, commonly used with the [scrapy](https://pypi.org/project/Scrapy/) webscraping framework.
 
-Scrapy Processors is a collection of Processor classes meant to extend the collection provided in the [itemloaders](https://pypi.org/project/itemloaders/) package, commonly used with the [scrapy](https://pypi.org/project/Scrapy/) webscraping framework.
+These processors are meant to extend / replace the provided processors in the [itemloaders](https://pypi.org/project/itemloaders/) package.
 
-
-https://docs.scrapy.org/en/latest/topics/loaders.html
+## Table of Contents
+pass
 
 ## Repositories
 [PyPI](https://pypi.org/project/scrapy-processors/)
@@ -24,17 +26,50 @@ To install Scrapy Processors, simply use pip:
 $ pip install scrapy-processors
 ```
 
+## What's a processor?
+
+In the context of the itemloaders package a processor is a callable that takes
+a single value and returns a transformed value.
+
+```
+
+
+In the context of the itemloaders package a processor is a callable that takes
+a value or an iterable of values and returns a transformed value or an iterable
+of transformed values.
+
+```
+#python
+
+str.upper           # Built-in processor
+lambda x: x.upper() # Lambda processor
+
+def upper(value):
+    return value.upper()
+
+class Upper:
+    def __call__(self, value):
+        return value.upper()
+
+
+
+
+```
+
+```
+```
+
 ## Usage
 
 Here is an overview of the processors available in the package:
 
-- `MapCompose`: A processor that allows you to specify a list of callables that will be applied sequentially to a value, or to each value in a list of values. 
+- `MapCompose`: A processor that allows you to specify a list of callables that will be applied sequentially to a value, or to each value in a list of values.
     It supports functions (regular functions, lambda or methods), objects with a `__call__` method or classes that once initialized return an object with a `__call__` method.
     This class inherits from itemloaders.processors.MapCompose and overrides its constructor and defines `__add__`.
 - `Processor`: A base class for creating custom processors. Subclasses of `Processor` should implement the `process_value` method.
 - `EnsureEncoding`: A processor that converts a string to a specified encoding, defaults to utf-8 & ignores errors.
-- `NormalizeWhitespace`: A processor that normalizes whitespace in a string by 
-    removing zero-width spaces, replacing multiple whitespaces with a single whitespace, removing leading whitespace in front of punctuation and finally removing leading/trailing whitespaces. 
+- `NormalizeWhitespace`: A processor that normalizes whitespace in a string by
+    removing zero-width spaces, replacing multiple whitespaces with a single whitespace, removing leading whitespace in front of punctuation and finally removing leading/trailing whitespaces.
     default punctuation=(',', '.', '!', '?', ';', ':')
 - `PriceParser`: A processor that converts a string representing a price to a `Price` object using the `price_parser` library.
 - `RemoveHTMLTags`: A processor that removes HTML tags from a string using the `BeautifulSoup` library.

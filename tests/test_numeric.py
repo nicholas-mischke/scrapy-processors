@@ -87,11 +87,11 @@ class TestNormalizeNumericString:
             "1000"
         ),
         (
-            {   
+            {
                 'decimal_places': 2,
                 'keep_trailing_zeros': True,
                 'input_decimal_separator': '.'
-                
+
             },
             "1,000.000",
             "1000.00"  # Rounded to 2 decimal places
@@ -145,3 +145,37 @@ class TestPriceParser:
         price = processor(input_value)[0]
         assert math.isclose(price.amount, expected_amount, rel_tol=1e-9)
         assert price.currency == expected_currency
+
+
+class TestExtractDigits:
+
+    @pytest.fixture
+    def processor(self):
+        return ExtractDigits()
+
+    def wrap_in_text(self, value):
+        return f'This is some text {value} This is some more text'
+
+    @pytest.mark.parametrize("input_value", [
+        "1000",
+        "1,000",
+        "1.000",
+        "1,000.12",
+        "1.000,12",
+    ])
+    def test_process_value(self, processor, input_value):
+        assert processor.process_value(self.wrap_in_text(input_value)) == [input_value]
+
+    @pytest.mark.parametrize("input_value, context", [
+        ("1 000.12", [' ', '.']),
+        ("123", None),
+        ("123-456-7890", ['-']),  # phone number
+        ("1234 5678 9012 3456", [' ']),  # credit card number
+        ("2023-06-19 at 12:30", [' at ', '-', ':']),  # date, time or datetime
+        ("1:000-12", [':', '-']),  # other format
+    ])
+    def test_with_loader_context(self, processor, input_value, context):
+        assert processor.process_value(
+            self.wrap_in_text(input_value),
+            context={'separators': context}
+        ) == [input_value]

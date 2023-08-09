@@ -15,16 +15,16 @@ from scrapy_processors.utils import wrap_context
 class MapCompose(ProcessorCollection):
     """
     This Processor is used to apply a sequence of processors to each value in a collection of values.
-    This behavior distinguishes it from the Compose Processor, which applies a sequence of 
+    This behavior distinguishes it from the Compose Processor, which applies a sequence of
     processors to a collection as a whole.
 
     The constructor of this Processor accepts any callable object as an argument.
     Any keyword arguments are passed to the constructor become the default_context
 
     Example:
-        Consider you wish to remove superfluous whitespace in a string and then convert the 
-        string to lowercase. This can be achieved using the NormalizeWhitespace Processor 
-        from this package and Python's built-in str.lower function. They can be chained 
+        Consider you wish to remove superfluous whitespace in a string and then convert the
+        string to lowercase. This can be achieved using the NormalizeWhitespace Processor
+        from this package and Python's built-in str.lower function. They can be chained
         together using the MapCompose Processor:
 
         >>> processor = MapCompose(NormalizeWhitespace(), str.lower)
@@ -33,7 +33,7 @@ class MapCompose(ProcessorCollection):
 
         The processor also works on single values, asumming they're not iterable,
         or on strings / dictionaries, which are treated as single non iterable.
-        >>> processor(' Hello') 
+        >>> processor(' Hello')
         ['hello']
 
         To demonstrate addition of MapCompose objects:
@@ -63,8 +63,8 @@ class MapCompose(ProcessorCollection):
     @iter_values_chainmap_context_decorator
     def __call__(
         self,
-        values: Union[V, Iterable[V]],
-        loader_context: Optional[Mapping[str, Any]] = None
+        values,
+        loader_context = None
     ) -> List[Any]:
 
         wrapped_processors = [
@@ -89,9 +89,9 @@ class MapCompose(ProcessorCollection):
 
 class Compose(ProcessorCollection):
     """
-    This Processor is used to apply a sequence of processors to a 
+    This Processor is used to apply a sequence of processors to a
     single value of a collection of values.
-    This behavior distinguishes it from the MapCompose Processor, which 
+    This behavior distinguishes it from the MapCompose Processor, which
     applies a sequence of processors to each value in a collection.
 
     constructor takes args and kwargs. args become the processors and kwargs become the default_context
@@ -124,7 +124,7 @@ class Compose(ProcessorCollection):
 
         Note that above if lambda x: x * 2 is replaced with
         lambda x: [x * 2] a list will be returned instead of an int.
-        This may or may not be desirable depending on the use case. 
+        This may or may not be desirable depending on the use case.
     """
 
     stop_on_none: bool = True

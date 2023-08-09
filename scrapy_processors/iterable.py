@@ -1,8 +1,8 @@
-
 # Standard library imports
 from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
 # itemloaders imports
+from scrapy.utils.python import flatten
 from itemloaders.processors import Identity
 
 # Local application/library specific imports
@@ -16,6 +16,7 @@ class TakeAll(Identity):
     Renaming of itemloaders.processors.Identity Processor.
     The name is more intutive when using the processor as an output processor.
     """
+
     pass
 
 
@@ -24,7 +25,7 @@ class TakeAllTruthy(Processor):
     Processor that takes an iterable and returns all truthy values.
     If no values are truthy, return default parameter passed to the constructor.
 
-    In Python, truthy values are those which are evaluated to True in a Boolean context. 
+    In Python, truthy values are those which are evaluated to True in a Boolean context.
     All values are considered "truthy" except for the following, which are "falsy":
     - None
     - False
@@ -47,15 +48,10 @@ class TakeAllTruthy(Processor):
     falsey: Tuple[Any] = falsey_values
 
     def __call__(
-        self,
-        values: Iterable[V],
-        loader_context: Optional[Mapping[str, Any]] = None
+        self, values: Iterable[V], loader_context: Optional[Mapping[str, Any]] = None
     ) -> List[V]:
-
         default, falsey = self.unpack_context(loader_context)
-        return [
-            value for value in values if value not in falsey
-        ] or default
+        return [value for value in values if value not in falsey] or default
 
 
 class TakeFirstTruthy(Processor):
@@ -67,11 +63,8 @@ class TakeFirstTruthy(Processor):
     falsey: Tuple[Any] = falsey_values
 
     def __call__(
-        self,
-        values: Iterable[V],
-        loader_context: Optional[Mapping[str, Any]] = None
+        self, values: Iterable[V], loader_context: Optional[Mapping[str, Any]] = None
     ) -> V:
-
         default, falsey = self.unpack_context(loader_context)
 
         for value in values:
@@ -81,19 +74,32 @@ class TakeFirstTruthy(Processor):
         return default
 
 
+class Coalesce(Processor):
+    """Return first non NoneType value in an iterable."""
+
+    def __call__(self, values, loader_context=None):
+        return next((v for v in values if v is not None), None)
+
+
 class Join(Processor):
     """
     Given an iterable of values, return a string of the values joined by a separator.
     Elements of the iterable must be strings or have a __str__ method defined.
     """
 
-    separator: str = ' '
+    separator: str = " "
 
     def __call__(
-        self,
-        values: Iterable[V],
-        loader_context: Optional[Mapping[str, Any]] = None
+        self, values: Iterable[V], loader_context: Optional[Mapping[str, Any]] = None
     ) -> str:
-
         separator = self.unpack_context(loader_context)
         return separator.join([str(value) for value in values])
+
+
+class Flatten(Processor):
+    """
+    _flatten_ an iterable of iterables into a single iterable.
+    """
+
+    def __call__(self, values, loader_context=None) -> List[V]:
+        return flatten(values)

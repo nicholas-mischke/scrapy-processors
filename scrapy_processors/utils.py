@@ -1,7 +1,6 @@
-
 # Standard library imports
 from functools import partial
-from typing import Any, Callable, Dict, Mapping, Set, Tuple, Type, Union
+from typing import Any, Callable, Dict, Mapping, Set, Tuple, Type, Union, Iterable
 
 # itemloaders imports
 from itemloaders.utils import get_func_args
@@ -10,7 +9,9 @@ from itemloaders.utils import get_func_args
 from scrapy_processors.common import ProcessorType, WrappedProcessorType
 
 
-def wrap_context(processor: ProcessorType, context: Mapping[str, Any]) -> WrappedProcessorType:
+def wrap_context(
+    processor: ProcessorType, context: Mapping[str, Any]
+) -> WrappedProcessorType:
     """
     Wraps a callable function to include a context dictionary as the first argument.
     If the callable function does not accept a 'context' or 'loader_context' argument,
@@ -31,9 +32,9 @@ def wrap_context(processor: ProcessorType, context: Mapping[str, Any]) -> Wrappe
     """
     args = get_func_args(processor)
 
-    if 'context' in args:
+    if "context" in args:
         return partial(processor, context=context)
-    elif 'loader_context' in args:
+    elif "loader_context" in args:
         return partial(processor, loader_context=context)
     else:
         return processor
@@ -41,7 +42,7 @@ def wrap_context(processor: ProcessorType, context: Mapping[str, Any]) -> Wrappe
 
 def get_processor(potential_processor: Union[Callable, Type]) -> ProcessorType:
     """
-    Returns a callable ProcessorType given an argument. The argument can either be a 
+    Returns a callable ProcessorType given an argument. The argument can either be a
     callable object or a class that once initialized becomes callable.
 
     If the argument is already callable, it's directly returned.
@@ -53,7 +54,7 @@ def get_processor(potential_processor: Union[Callable, Type]) -> ProcessorType:
         value(s) and optionally a context. Because built-in python C functions
         cannot be inspected, this is not possible.
 
-        for example: str.upper only accepts one argument, and is a valid processor 
+        for example: str.upper only accepts one argument, and is a valid processor
         but get_func_args(str.upper) raises a TypeError.
 
     Args:
@@ -76,8 +77,9 @@ def get_processor(potential_processor: Union[Callable, Type]) -> ProcessorType:
         3
     """
 
-    name = getattr(potential_processor, '__qualname__',
-                   type(potential_processor).__name__)
+    name = getattr(
+        potential_processor, "__qualname__", type(potential_processor).__name__
+    )
 
     if not callable(potential_processor):
         raise TypeError(
@@ -110,15 +112,16 @@ def get_processor(potential_processor: Union[Callable, Type]) -> ProcessorType:
     return potential_processor
 
 
-def merge_contexts(context_a: Mapping[str, Any], context_b: Mapping[str, Any]) -> Dict[str, Any]:
+def merge_contexts(
+    context_a: Mapping[str, Any], context_b: Mapping[str, Any]
+) -> Dict[str, Any]:
     """
-    Merge two dicts, if they contain the same key the must contain the same 
+    Merge two dicts, if they contain the same key the must contain the same
     value, if they don't raise an Exception.
     This is used to merge the default_context of two ProcessorCollections.
     """
 
-    shared_keys = list(set(context_a.keys()) & set(
-        context_b.keys()))  # same order
+    shared_keys = list(set(context_a.keys()) & set(context_b.keys()))  # same order
     a_values = [context_a[key] for key in shared_keys]
     b_values = [context_b[key] for key in shared_keys]
 
@@ -132,14 +135,18 @@ def merge_contexts(context_a: Mapping[str, Any], context_b: Mapping[str, Any]) -
 
 def to_sets(*args: Any) -> Tuple[Set[Any], ...]:
     """
-    Convert iterables to sets, place non-iterables into a set. 
+    Convert iterables to sets, place non-iterables into a set.
     Returns a tuple of sets
     """
     sets = []
     for arg in args:
-        if isinstance(arg, (list, tuple, set)):
+        if arg is None:
+            sets.append(set())
+        elif isinstance(arg, (list, tuple, set)):
             sets.append(set(arg))
         else:
             sets.append({arg})
 
+    if len(sets) == 1:
+        return sets[0]
     return tuple(sets)

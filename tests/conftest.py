@@ -1,11 +1,10 @@
-
 import pytest
 import inspect
 
 
-def pytest_pycollect_makeitem(collector, name, obj):
-    if inspect.isclass(obj) and name.startswith('test'):
-        return pytest.Class.from_parent(collector, name=name)
+# def pytest_pycollect_makeitem(collector, name, obj):
+#     if inspect.isclass(obj) and name.startswith("test"):
+#         return pytest.Class.from_parent(collector, name=name)
 
 
 @pytest.fixture
@@ -21,6 +20,7 @@ def lower_processor():
 @pytest.fixture
 def upper_processor():
     return lambda x: x.upper()
+
 
 @pytest.fixture
 def title_processor():
