@@ -176,7 +176,14 @@ class TestProcessorMeta:
 
     def test__call__(self, processor_cls):
         assert processor_cls().default_context == {"a": 1, "b": 2, "c": 3}
-        assert processor_cls(10, c=30).default_context == {"a": 10, "b": 2, "c": 30}
+        assert processor_cls(
+            10, c=30, z="Not in default_context keys"
+        ).default_context == {
+            "a": 10,
+            "b": 2,
+            "c": 30,
+            "z": "Not in default_context keys",
+        }
 
 
 class TestProcessorCollectionMeta:
@@ -202,8 +209,8 @@ class TestProcessorCollectionMeta:
             "SomeProcessorCollection class should not define __init__. "
             "The __init__ method is reserved for the ProcessorCollectionMeta metaclass. "
             "The variable length positional arguments passed to the constructor "
-            "become the instances processors. The variable length keyword arguments "
-            "are used to update the instances default_context attr."
+            "become the instance's processors. The variable length keyword arguments "
+            "are used to update the instance's default_context attr."
         )
 
     def test__call__(self, processor_collection_cls):
@@ -212,9 +219,9 @@ class TestProcessorCollectionMeta:
         def reverse(value):
             return value[::-1]
 
-        processor = processor_collection_cls(upper_processor, reverse, a=10, c=30)
+        processor = processor_collection_cls(upper_processor, reverse, a=10, c=30, z="Not in default_context keys")
         assert processor.processors == [upper_processor, reverse]
-        assert processor.default_context == {"a": 10, "b": 2, "c": 30}
+        assert processor.default_context == {"a": 10, "b": 2, "c": 30, "z": "Not in default_context keys"}
 
 
 class TestContextMixin:

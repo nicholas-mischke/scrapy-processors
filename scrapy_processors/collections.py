@@ -1,4 +1,3 @@
-
 # Standard library imports
 from typing import Any, Iterable, List, Optional, Union, Mapping
 
@@ -7,7 +6,10 @@ from itemloaders.utils import arg_to_iter
 
 # Local application/library specific imports
 from scrapy_processors.base import ProcessorCollection
-from scrapy_processors.base import chainmap_context_decorator, iter_values_chainmap_context_decorator
+from scrapy_processors.base import (
+    chainmap_context_decorator,
+    iter_values_chainmap_context_decorator,
+)
 from scrapy_processors.common import T, V
 from scrapy_processors.utils import wrap_context
 
@@ -60,16 +62,9 @@ class MapCompose(ProcessorCollection):
         ['Hello', 'World']
     """
 
-    @iter_values_chainmap_context_decorator
-    def __call__(
-        self,
-        values,
-        loader_context = None
-    ) -> List[Any]:
-
+    def __call__(self, values, loader_context=None) -> Any:
         wrapped_processors = [
-            wrap_context(processor, loader_context)
-            for processor in self.processors
+            wrap_context(processor, loader_context) for processor in self.processors
         ]
 
         for processor in wrapped_processors:
@@ -130,18 +125,12 @@ class Compose(ProcessorCollection):
     stop_on_none: bool = True
     default: Any = None
 
-    @chainmap_context_decorator
-    def __call__(
-        self,
-        value: List[T],
-        loader_context: Optional[Mapping[str, Any]] = None
-    ) -> Any:
+    def __call__(self, values, loader_context=None) -> Any:
 
         stop_on_none, default = self.unpack_context(loader_context)
 
         wrapped_processors = [
-            wrap_context(processor, loader_context)
-            for processor in self.processors
+            wrap_context(processor, loader_context) for processor in self.processors
         ]
 
         for processor in wrapped_processors:
