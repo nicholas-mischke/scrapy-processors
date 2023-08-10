@@ -1,6 +1,16 @@
 import pytest
 from scrapy_processors.base import Processor, ProcessorCollection
 
+import re
+
+
+def single_space(text):
+    """
+    When testing Exception msg it's easy to add an extra space here or there
+    on linebreaks, this function removes all extra whitespace.
+    """
+    return re.sub(r"\s+", " ", str(text)).strip()
+
 
 @pytest.fixture
 def processor_cls():
@@ -14,7 +24,7 @@ def processor_cls():
         def process_value(self, value, **context):
             return value, context
 
-        def __call__(self, values, loader_context):
+        def __call__(self, values, **loader_context):
             return values, loader_context
 
     return SomeProcessor
@@ -34,8 +44,8 @@ def processor_collection_cls():
 
         a, b, c = 1, 2, 3
 
-        def __call__(self, values, loader_context):
-            return values, loader_context
+        def __call__(self, values, *wrapped_processors, **loader_context):
+            return values, wrapped_processors, loader_context
 
     return SomeProcessorCollection
 
@@ -75,51 +85,31 @@ class TestProcessorMeta:
             == "The class attribute 'selector' is reserved for the ItemLoader class, please choose a different name."
         )
 
-    def test_prepare_dunder_call_raises(self):
-        with pytest.raises(TypeError) as e:
-
-            class SomeProcessor(Processor):
-                def __call__(self, *, values, loader_context):
-                    pass
-
-        assert str(e.value) == (
-            "Invalid signature `SomeProcessor.__call__(self, *, values, loader_context)`. "
-            "The first parameter must be positional, not KEYWORD_ONLY"
-        )
-
-        with pytest.raises(TypeError) as e:
-
-            class SomeProcessor(Processor):
-                def __call__(self, values, not_loader_context):
-                    pass
-
-        assert str(e.value) == (
-            "Invalid signature `SomeProcessor.__call__(self, values, not_loader_context)`. "
-            "The second parameter must be named `loader_context`, not `not_loader_context`"
-        )
-
+    def test_prepare_process_value_raises(self):
         with pytest.raises(ValueError) as e:
 
-            class SomeProcess(Processor):
-                def __call__(self, values, loader_context, extra_arg):
+            class SomeProcessor(Processor):
+                def process_value(self, value, extra_arg, **context):
                     pass
 
-        assert str(e.value) == (
-            "Invalid signature `SomeProcess.__call__(self, values, loader_context, extra_arg)`. "
-            "The method can take other parameters besides `values` and `loader_context`, "
-            "but they must be optional parameters."
+        assert single_space(e.value) == single_space(
+            (
+                "Invalid signature `SomeProcessor.process_value(self, value, extra_arg, **context)`. "
+                "`SomeProcessor.process_value(self, value, **context)` is the only valid signature."
+            )
         )
 
-    def test_prepare_process_value_raises(self):
         with pytest.raises(TypeError) as e:
 
             class SomeProcessor(Processor):
                 def process_value(self, *, value, **context):
                     pass
 
-        assert str(e.value) == (
-            "Invalid signature `SomeProcessor.process_value(self, *, value, **context)`. "
-            "The first parameter must be positional, not KEYWORD_ONLY"
+        assert single_space(e.value) == single_space(
+            (
+                "Invalid signature `SomeProcessor.process_value(self, *, value, **context)`. "
+                "The first parameter must be positional, not KEYWORD_ONLY."
+            )
         )
 
         with pytest.raises(TypeError) as e:
@@ -128,22 +118,54 @@ class TestProcessorMeta:
                 def process_value(self, value, context):
                     pass
 
-        assert str(e.value) == (
-            "Invalid signature `SomeProcessor.process_value(self, value, context)`. "
-            "There must be a variable length keyword parameter. "
-            "Typically named `context`, declared as **context."
+        assert single_space(e.value) == single_space(
+            (
+                "Invalid signature `SomeProcessor.process_value(self, value, context)`. "
+                "There must be a variable length keyword parameter. "
+                "Typically named `context`, declared as **context."
+            )
         )
 
+    def test_prepare_dunder_call_raises(self):
         with pytest.raises(ValueError) as e:
-
-            class SomeProcessor(Processor):
-                def process_value(self, value, extra_arg, **context):
+            # Too many parameters
+            class SomeProcess(Processor):
+                def __call__(self, values, extra_arg, **loader_context):
                     pass
 
-        assert str(e.value) == (
-            "Invalid signature `SomeProcessor.process_value(self, value, extra_arg, **context)`. "
-            "The method can take other parameters besides `values` and `loader_context`, "
-            "but they must be optional parameters."
+        assert single_space(e.value) == single_space(
+            (
+                "Invalid signature `SomeProcess.__call__(self, values, extra_arg, **loader_context)`. "
+                "`SomeProcess__call__(self, values, **loader_context)` is the only valid signature."
+            )
+        )
+
+        with pytest.raises(TypeError) as e:
+
+            class SomeProcessor(Processor):
+                # values not positional
+                def __call__(self, *, values, loader_context):
+                    pass
+
+        assert single_space(e.value) == single_space(
+            (
+                "Invalid signature `SomeProcessor.__call__(self, *, values, loader_context)`. "
+                "The first parameter must be positional, not KEYWORD_ONLY."
+            )
+        )
+
+        with pytest.raises(TypeError) as e:
+            # loader_context not keyword
+            class SomeProcessor(Processor):
+                def __call__(self, values, context):
+                    pass
+
+        assert single_space(e.value) == single_space(
+            (
+                "Invalid signature `SomeProcessor.__call__(self, values, context)`. "
+                "The second parameter must be a variable length keyword parameter "
+                "(typically named `loader_context`), not POSITIONAL_OR_KEYWORD with name `context`."
+            )
         )
 
     def test__init__(self, processor):
@@ -156,7 +178,7 @@ class TestProcessorMeta:
         assert value == 1
         assert dict(context) == {"a": 10, "b": 2, "c": 3}
 
-        values, loader_context = processor("some value", {"a": 10})
+        values, loader_context = processor("some value", **{"a": 10})
         assert values == ["some value"]
         assert dict(loader_context) == {"a": 10, "b": 2, "c": 3}
 
@@ -194,8 +216,11 @@ class TestProcessorCollectionMeta:
         If the signature of __call__ is valid
         verify the applied decorators are working.
         """
-        values, loader_context = processor_collection("some value", {"a": 10})
+        values, wrapped_processors, loader_context = processor_collection(
+            "some value", **{"a": 10}
+        )
         assert values == ["some value"]
+        assert str(wrapped_processors) == str(tuple())
         assert dict(loader_context) == {"a": 10, "b": 2, "c": 3}
 
     def test__init__raises(self):
@@ -213,15 +238,72 @@ class TestProcessorCollectionMeta:
             "are used to update the instance's default_context attr."
         )
 
+    def test_prepare_dunder_call_raises(self):
+        with pytest.raises(ValueError) as e:
+
+            class SomeProcessorCollection(ProcessorCollection):
+                def __call__(
+                    self, values, extra_arg, *wrapped_processors, **loader_context
+                ):
+                    pass
+
+        assert single_space(e.value) == single_space(
+            (
+                "Invalid signature "
+                "`SomeProcessorCollection.__call__(self, values, extra_arg, *wrapped_processors, **loader_context)`. "
+                "`SomeProcessorCollection.__call__(self, values, *wrapped_processors, **loader_context)` "
+                "is the only valid signature."
+            )
+        )
+
+        # values will have to be positional, since we have *wrapped_processors
+
+        with pytest.raises(TypeError) as e:
+            # wrapped_processors not variable positional
+            class SomeProcessorCollection(ProcessorCollection):
+                def __call__(self, values, *, wrapped_processors, loader_context):
+                    pass
+
+        assert single_space(e.value) == single_space(
+            (
+                "Invalid signature "
+                "`SomeProcessorCollection.__call__(self, values, *, wrapped_processors, loader_context)`. "
+                "The second parameter must be a variable length positional parameter "
+                "(typically named `wrapped_processors`), not KEYWORD_ONLY."
+            )
+        )
+
+        with pytest.raises(TypeError) as e:
+            # loader_context not variable keyword
+            class SomeProcessorCollection(ProcessorCollection):
+                def __call__(self, values, *wrapped_processors, loader_context):
+                    pass
+
+        assert single_space(e.value) == single_space(
+            (
+                "Invalid signature "
+                "`SomeProcessorCollection.__call__(self, values, *wrapped_processors, loader_context)`. "
+                "The third parameter must be a variable length keyword parameter "
+                "(typically named `loader_context`), not VAR_POSITIONAL."
+            )
+        )
+
     def test__call__(self, processor_collection_cls):
         upper_processor = str.upper
 
         def reverse(value):
             return value[::-1]
 
-        processor = processor_collection_cls(upper_processor, reverse, a=10, c=30, z="Not in default_context keys")
+        processor = processor_collection_cls(
+            upper_processor, reverse, a=10, c=30, z="Not in default_context keys"
+        )
         assert processor.processors == [upper_processor, reverse]
-        assert processor.default_context == {"a": 10, "b": 2, "c": 30, "z": "Not in default_context keys"}
+        assert processor.default_context == {
+            "a": 10,
+            "b": 2,
+            "c": 30,
+            "z": "Not in default_context keys",
+        }
 
 
 class TestContextMixin:

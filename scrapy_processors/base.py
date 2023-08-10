@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Tuple, Type, Ty
 
 # 3rd 🎉 imports
 from itemloaders.utils import arg_to_iter
+from itemloaders.common import wrap_loader_context
 
 # Typing variables
 ValueType = TypeVar("ValueType")  # Single input value type
@@ -68,119 +69,6 @@ class MetaMixin(type):
 
         namespace["default_context"] = cls_attrs
         return super().__new__(cls, name, bases, namespace)
-
-    @staticmethod
-    def prepare_dunder_call(cls_name: str, func: Callable) -> Callable:
-        """
-        Prepare the __call__ method by applying specific validations and a decorator.
-
-        Parameters:
-        ----------
-        cls_name : str
-            The name of the class the __call__ method belongs to.
-        func : Callable
-            The original __call__ method to be prepared.
-
-        Returns:
-        -------
-        Callable
-            A decorated version of the original __call__ method, with additional logic.
-
-        Signature Validation:
-        --------------------
-        The signature is checked for the parameters `values` and `loader_context`.
-
-        - `values`: Must be the first parameter after `self` and must be positional. It can take any name.
-        - `loader_context`: Must be the second parameter after `self` and must be named `loader_context`. Any other name and it will be ignored by the itemloaders package.
-        - Additional Parameters: If present, they must be optional.
-
-        Decorator Functionality:
-        -----------------------
-        The decorator has three jobs:
-        - If a single value is passed to `values`, the value is placed in a list.
-        - If `loader_context` is passed, it's passed to the method as `ChainMap(loader_context, self.default_context)`.
-        - `loader_context` is given a default value of `None`, making it optional.
-
-        Raises:
-        ------
-        TypeError
-            If the signature of the provided callable violates the rules.
-        ValueError
-            If there are non-optional parameters other than `values` and `loader_context`.
-        """
-        sig = signature(func)
-        params = list(sig.parameters.values())
-
-        self, values, loader_context, *other_params = params
-
-        msg = f"Invalid signature `{cls_name}.__call__{sig}`. "
-
-        # Validate 'values' parameter
-        if not MetaMixin.param_is_pos(values):
-            raise TypeError(
-                msg
-                + f"The first parameter must be positional, not {str(values.kind).upper()}"
-            )
-
-        # Validate 'loader_context' parameter
-        if loader_context.name != "loader_context":
-            raise TypeError(
-                msg
-                + f"The second parameter must be named `loader_context`, not `{loader_context.name}`"
-            )
-
-        for param in other_params:
-            if param.default == EMPTY:
-                raise ValueError(
-                    msg
-                    + "The method can take other parameters besides `values` and `loader_context`, but they must be optional parameters."
-                )
-
-        def decorator(func: Callable) -> Callable:
-            """
-            A decorator to modify the behavior of the __call__ method.
-
-            This decorator performs two main jobs:
-
-            - If a single value is passed to the `values` parameter,
-            it's placed into a list. This ensures that the subsequent code can always expect
-            an iterable, even if only one value is provided.
-
-            - Passes the `loader_context` to the method as ChainMap(loader_context, self.default_context).
-            The `loader_context` takes priority over `default_context`, allowing for dynamic
-            overrides of default values.
-
-            Parameters
-            ----------
-            func : Callable
-                The original function to be decorated.
-
-            Returns
-            -------
-            Callable
-                The decorated function with modified behavior.
-
-            Example Usage
-            -------------
-            @decorator
-            def my_call_method(self, values, loader_context=None):
-                # Implementation here
-            """
-
-            @wraps(func)
-            def wrapper(self, values, loader_context=None, **kwargs):
-                return func(
-                    self,
-                    arg_to_iter(values),  # Handle single value
-                    ChainMap(
-                        loader_context or {}, self.default_context
-                    ),  # Handle context
-                    **kwargs,
-                )
-
-            return wrapper
-
-        return decorator(func)
 
 
 class ProcessorMeta(MetaMixin):
@@ -266,36 +154,35 @@ class ProcessorMeta(MetaMixin):
 
         Signature Validation:
         --------------------
-        - The first parameter after 'self' must accept positional arguments.
-            Typically this is called "value", but it can be called anything.
-        - There must be a variable-length keyword parameter.
-            Typically this is called "context", but it can be called anything.
-        - Additional parameters are allowed, but they must have default values.
+        process_value(self, value, **context) is the only valid signature
 
         Decorator Functionality:
         -----------------------
-        - Chainmap(context, self.default_context) is passed to the variable keyword parameter
-        instead of context by itself.
+        The decorator allows you to call the method as expected
 
-        Example Usage:
-        -------------
-        @chainmap_context
-        def process_value(self, value, **context): ...
+        process_value(self, value, **context), but the method will receive
+        **Chainmap(context, self.default_context) instead of **context by itself.
         """
 
         sig = signature(func)
         params = list(sig.parameters.values())
 
-        self, value, *other_params, context = params
-
         # Exception msg
         msg = f"Invalid signature `{cls_name}.process_value{sig}`. "
+
+        if len(params) != 3:
+            raise ValueError(
+                msg
+                + f"`{cls_name}.process_value(self, value, **context)` is the only valid signature."
+            )
+
+        self, value, context = params
 
         # Validate 'value' parameter
         if not MetaMixin.param_is_pos(value):
             raise TypeError(
                 msg
-                + f"The first parameter must be positional, not {str(value.kind).upper()}"
+                + f"The first parameter must be positional, not {str(value.kind).upper()}."
             )
 
         # Validate 'context' parameter
@@ -304,13 +191,6 @@ class ProcessorMeta(MetaMixin):
                 msg
                 + "There must be a variable length keyword parameter. Typically named `context`, declared as **context."
             )
-
-        for param in other_params:
-            if param.default == EMPTY:
-                raise ValueError(
-                    msg
-                    + "The method can take other parameters besides `values` and `loader_context`, but they must be optional parameters."
-                )
 
         def decorator(func):
             """
@@ -330,8 +210,117 @@ class ProcessorMeta(MetaMixin):
             """
 
             @wraps(func)
-            def wrapper(self, *args, **context):
-                return func(self, *args, **ChainMap(context, self.default_context))
+            def wrapper(self, value, **context):
+                return func(self, value, **ChainMap(context, self.default_context))
+
+            return wrapper
+
+        return decorator(func)
+
+    @staticmethod
+    def prepare_dunder_call(cls_name: str, func: Callable) -> Callable:
+        """
+        Prepare the __call__ method by applying specific validations and a decorator.
+
+        Parameters:
+        ----------
+        cls_name : str
+            The name of the class the __call__ method belongs to.
+        func : Callable
+            The original __call__ method to be prepared.
+
+        Returns:
+        -------
+        Callable
+            A decorated version of the original __call__ method, with additional logic.
+
+        Signature Validation:
+        --------------------
+        __call__(self, values, **loader_context) is the only valid signature.
+
+        Decorator Functionality:
+        -----------------------
+        The decorator allows you to call the proecssor with
+
+        >>> proc([1, 2, 3]) # No loader context
+        >>> proc([1, 2, 3], {'a': 1}) # With loader context passed as a positional argument
+        >>> proc([1, 2, 3], a=1) # With loader context passed as a keyword argument
+        >>> proc([1, 2, 3], **{'a': 1}) # With loader context passed as a keyword argument
+
+        All results will be the same.
+
+        loader_context becomes ChainMap(kwargs, loader_context or {}, self.default_context)
+
+        Raises:
+        ------
+        TypeError
+            If the signature of the provided callable violates the rules.
+        ValueError
+            If there are non-optional parameters other than `values` and `loader_context`.
+        """
+        sig = signature(func)
+        params = list(sig.parameters.values())
+
+        msg = f"Invalid signature `{cls_name}.__call__{sig}`. "
+
+        if len(params) != 3:
+            raise ValueError(
+                msg
+                + f"`{cls_name}__call__(self, values, **loader_context)` is the only valid signature."
+            )
+
+        self, values, loader_context = params
+
+        # Validate 'values' parameter
+        if not MetaMixin.param_is_pos(values):
+            raise TypeError(
+                msg
+                + f"The first parameter must be positional, not {str(values.kind).upper()}."
+            )
+
+        # Validate 'loader_context' parameter
+        if str(loader_context.kind).upper() != "VAR_KEYWORD":
+            raise TypeError(
+                msg
+                + f"The second parameter must be a variable length keyword parameter (typically named `loader_context`), not {str(loader_context.kind).upper()} with name `{loader_context.name}`."
+            )
+
+        def decorator(func: Callable) -> Callable:
+            """
+            A decorator to modify the behavior of the __call__ method.
+
+            This decorator performs two main jobs:
+
+            - If a single value is passed to the `values` parameter,
+            it's placed into a list. This ensures that the subsequent code can always expect
+            an iterable, even if only one value is provided.
+
+            - Passes the `loader_context` to the method as ChainMap(loader_context, self.default_context).
+            The `loader_context` takes priority over `default_context`, allowing for dynamic
+            overrides of default values.
+
+            Parameters
+            ----------
+            func : Callable
+                The original function to be decorated.
+
+            Returns
+            -------
+            Callable
+                The decorated function with modified behavior.
+            """
+
+            def wrapper(self, values, loader_context=None, **kwargs):
+                """
+                Kwargs are a stand_in for loader_context allowing for both
+                `__call__(self, values, loader_context)` and `__call__(self, values, **loader_context)`.
+                """
+                values = arg_to_iter(values)
+                loader_context = ChainMap(
+                    kwargs, loader_context or {}, self.default_context
+                )
+
+                return func(self, values, **loader_context)
 
             return wrapper
 
@@ -487,6 +476,132 @@ class ProcessorCollectionMeta(MetaMixin):
             ...
     """
 
+    @staticmethod
+    def prepare_dunder_call(cls_name: str, func: Callable) -> Callable:
+        """
+        Prepare the __call__ method by applying specific validations and a decorator.
+
+        Parameters:
+        ----------
+        cls_name : str
+            The name of the class the __call__ method belongs to.
+        func : Callable
+            The original __call__ method to be prepared.
+
+        Returns:
+        -------
+        Callable
+            A decorated version of the original __call__ method, with additional logic.
+
+        Signature Validation:
+        --------------------
+        def __call__(self, values, *wrapped_processors, **loader_context): ... is the only valid signature.
+
+        Decorator Functionality:
+        -----------------------
+        The decorator allows you to call the proecssor with
+
+        >>> proc([1, 2, 3]) # No loader context
+        >>> proc([1, 2, 3], {'a': 1}) # With loader context passed as a positional argument
+        >>> proc([1, 2, 3], a=1) # With loader context passed as a keyword argument
+        >>> proc([1, 2, 3], **{'a': 1}) # With loader context passed as a keyword argument
+
+        All results will be the same.
+
+        loader_context becomes ChainMap(kwargs, loader_context or {}, self.default_context)
+        wrapped_processors are the instanes processors with the loader_context applied.
+
+        Raises:
+        ------
+        TypeError
+            If the signature of the provided callable violates the rules.
+        ValueError
+            If there are non-optional parameters other than `values`, `wrapped_proccessors` or `loader_context`.
+        """
+        sig = signature(func)
+        params = list(sig.parameters.values())
+
+        msg = f"Invalid signature `{cls_name}.__call__{sig}`. "
+
+        if len(params) != 4:
+            raise ValueError(
+                msg
+                + f"`{cls_name}.__call__(self, values, *wrapped_processors, **loader_context)` is the only valid signature."
+            )
+
+        self, values, wrapped_processors, loader_context = params
+
+        # Validate `values`` parameter
+        if not MetaMixin.param_is_pos(values):
+            raise TypeError(
+                msg
+                + f"The first parameter must be positional, not {str(values.kind).upper()}."
+            )
+
+        # Validate `wrapped_processors` parameter
+        if str(wrapped_processors.kind).upper() != "VAR_POSITIONAL":
+            raise TypeError(
+                msg
+                + f"The second parameter must be a variable length positional parameter (typically named `wrapped_processors`), not {str(wrapped_processors.kind).upper()}."
+            )
+
+        # Validate `loader_context` parameter
+        if str(loader_context.kind).upper() != "VAR_KEYWORD":
+            raise TypeError(
+                msg
+                + f"The third parameter must be a variable length keyword parameter (typically named `loader_context`), not {str(wrapped_processors.kind).upper()}."
+            )
+
+        def decorator(func: Callable) -> Callable:
+            """
+            A decorator to modify the behavior of the __call__ method.
+
+            This decorator performs two main jobs:
+
+            - If a single value is passed to the `values` parameter,
+            it's placed into a list. This ensures that the subsequent code can always expect
+            an iterable, even if only one value is provided.
+
+            - Passes the `loader_context` to the method as ChainMap(loader_context, self.default_context).
+            The `loader_context` takes priority over `default_context`, allowing for dynamic
+            overrides of default values.
+
+            Parameters
+            ----------
+            func : Callable
+                The original function to be decorated.
+
+            Returns
+            -------
+            Callable
+                The decorated function with modified behavior.
+            """
+
+            def wrapper(self, values, *, loader_context=None, **kwargs):
+                """
+                Kwargs are a stand_in for loader_context allowing for both
+                `__call__(self, values, loader_context)` and `__call__(self, values, **loader_context)`.
+                """
+
+                values = arg_to_iter(values)
+                loader_context = ChainMap(
+                    kwargs, loader_context or {}, self.default_context
+                )
+                wrapped_processors = [
+                    wrap_loader_context(p, loader_context) for p in self.processors
+                ]
+
+                return func(
+                    self,
+                    values,
+                    *wrapped_processors,
+                    **loader_context,
+                )
+
+            return wrapper
+
+        return decorator(func)
+
     def __init__(cls, name: str, bases: tuple, namespace: dict):
         """
         Initialize a new class with additional validations and attributes for ProcessorCollectionMeta.
@@ -527,7 +642,9 @@ class ProcessorCollectionMeta(MetaMixin):
             setattr(
                 cls,
                 "__call__",
-                ProcessorMeta.prepare_dunder_call(cls.__name__, namespace["__call__"]),
+                ProcessorCollectionMeta.prepare_dunder_call(
+                    cls.__name__, namespace["__call__"]
+                ),
             )
 
         super().__init__(name, bases, namespace)
@@ -695,7 +812,7 @@ class Processor(ContextMixin, metaclass=ProcessorMeta):
             "This method should be overridden in all subclasses to provide the processing logic."
         )
 
-    def __call__(self, values, loader_context=None) -> List[Any]:
+    def __call__(self, values, **loader_context) -> List[Any]:
         """
         Process a collection of values using an optional loader_context.
 
@@ -772,7 +889,7 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
     >>> print(new_collection([1, 2, 3])) # Output: [4, 6, 8]
     """
 
-    def __call__(self, values, loader_context=None) -> List[Any]:
+    def __call__(self, values, *wrapped_processors, **loader_context) -> List[Any]:
         """
         Process a collection of values using a list of processors and an optional loader_context.
 

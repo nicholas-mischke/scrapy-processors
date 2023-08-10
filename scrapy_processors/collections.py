@@ -1,72 +1,66 @@
 # Standard library imports
-from typing import Any, Iterable, List, Optional, Union, Mapping
+from typing import Any, List
 
 # itemloadesr imports
 from itemloaders.utils import arg_to_iter
 
 # Local application/library specific imports
 from scrapy_processors.base import ProcessorCollection
-from scrapy_processors.base import (
-    chainmap_context_decorator,
-    iter_values_chainmap_context_decorator,
-)
-from scrapy_processors.common import T, V
-from scrapy_processors.utils import wrap_context
 
 
 class MapCompose(ProcessorCollection):
     """
-    This Processor is used to apply a sequence of processors to each value in a collection of values.
-    This behavior distinguishes it from the Compose Processor, which applies a sequence of
-    processors to a collection as a whole.
+    MapCompose applies a collection of processors to each element in a list,
+    one after the other. If a processor returns a list, the list is flattened,
+    and the next processor is applied to each element of the flattened list.
 
-    The constructor of this Processor accepts any callable object as an argument.
-    Any keyword arguments are passed to the constructor become the default_context
+    This distinguishes it from Compose, which applies a collection of processors
+    to the entire list itself, one after the other. If a processor returns a list,
+    or another object type the next processor is called with that object.
+
+    The __init__ method of this class accepts any number of processors as positional arguments.
+    Any keyword arguments passed to the constructor become the default context for the processors.
+
+    These classes provide a list-like interface for adding, removing, and extending processors.
+    This is useful for creating reusable processors that can be extended by other processors.
+    When a mutable method (such as addition) is called on a processor, a new processor is returned,
+    leaving the original instance unchanged.
 
     Example:
-        Consider you wish to remove superfluous whitespace in a string and then convert the
-        string to lowercase. This can be achieved using the NormalizeWhitespace Processor
-        from this package and Python's built-in str.lower function. They can be chained
-        together using the MapCompose Processor:
+    -------
+        >>> class StripProcessor(Processor):
+        ...     def process_value(self, value, **context):
+        ...         return value.strip()
 
-        >>> processor = MapCompose(NormalizeWhitespace(), str.lower)
-        >>> processor([' Hello', 'World '])
-        ['hello', 'world']
+        >>> map_compose = MapCompose(StripProcessor(), str.upper, lambda x: x[::-1])
+        >>> map_compose([' hello', 'world '])
+        ['OLLEH', 'DLROW']
 
-        The processor also works on single values, asumming they're not iterable,
-        or on strings / dictionaries, which are treated as single non iterable.
-        >>> processor(' Hello')
-        ['hello']
+    List-like interface Example:
+    ---------------------------
+        >>> map_compose = MapCompose(lambda x: x[::-1])
+        >>> map_compose_two = map_compose + str.upper
 
-        To demonstrate addition of MapCompose objects:
+        >>> map_compose(['hello', 'world'])
+        ['olleh', 'dlrow']
+        >>> map_compose_two(['hello', 'world'])
+        ['OLLEH', 'DLROW']
 
-        >>> map_compose_1 = MapCompose(NormalizeWhitespace())
-        >>> map_compose_2 = MapCompose(str.lower)
-        >>> map_compose_3 = map_compose_1 + map_compose_2
-        >>> map_compose_3([' Hello', 'World '])
-        ['hello', 'world']
+    MapCompose vs Compose:
+    ----------------------
+        >>> def reverse(iterable):
+        ...     return iterable[::-1]
 
-        To add a single callable function to a MapCompose instance:
+        >>> map_compose = MapCompose(reverse)
+        >>> compose = Compose(reverse)
 
-        >>> map_compose_1 = MapCompose(NormalizeWhitespace(), str.lower)
-        >>> map_compose_2 = map_compose_1 + str.upper
-        >>> map_compose_2([' Hello', 'World '])
-        ['HELLO', 'WORLD']
-
-        To add a collection of processors to a MapCompose instance:
-
-        >>> processors = [str.upper, str.capitalize]
-        >>> map_compose_1 = MapCompose(NormalizeWhitespace(), str.lower)
-        >>> map_compose_2 = map_compose_1 + processors
-        >>> map_compose_2([' Hello', 'World '])
-        ['Hello', 'World']
+        >>> map_compose(['hello', 'world'])
+        ['olleh', 'dlrow']
+        >>> compose(['hello', 'world'])
+        ['world', 'hello']
     """
 
-    def __call__(self, values, loader_context=None) -> Any:
-        wrapped_processors = [
-            wrap_context(processor, loader_context) for processor in self.processors
-        ]
-
+    def __call__(self, values, *wrapped_processors, **loader_context) -> List[Any]:
         for processor in wrapped_processors:
             processed_values = []
             for value in values:
@@ -75,7 +69,7 @@ class MapCompose(ProcessorCollection):
                 except Exception as e:
                     raise ValueError(
                         "Error in MapCompose with "
-                        f"{str(processor)} value={values} "
+                        f"{str(processor)} values={values} "
                         f"error='{type(e).__name__}: {str(e)}'"
                     ) from e
             values = processed_values
@@ -84,64 +78,70 @@ class MapCompose(ProcessorCollection):
 
 class Compose(ProcessorCollection):
     """
-    This Processor is used to apply a sequence of processors to a
-    single value of a collection of values.
-    This behavior distinguishes it from the MapCompose Processor, which
-    applies a sequence of processors to each value in a collection.
+    Compose applies a collection of processors to the entire list of values,
+    one after the other. If a processor returns a list, or another object type
+    the next processor is called with that object.
 
-    constructor takes args and kwargs. args become the processors and kwargs become the default_context
-    stop_on_none: if True, the processing chain will stop when a processor returns None.
-    This is the default behavior.
+    This distinguishes it from MapCompose, which applies a collection of processors
+    to each individual element in a list, one after the other, flattening lists if necessary.
 
-    Examples:
-        To demonstrate the addition of Compose objects:
+    The __init__ method of this class accepts any number of processors as positional arguments.
+    Any keyword arguments passed to the constructor become the default_context for the processors.
 
-        >>> compose_1 = Compose(sum)
-        >>> compose_2 = Compose(lambda x: x * 2)
-        >>> compose_3 = compose_1 + compose_2
-        >>> compose_3([1, 2, 3, 4, 5])
-        30
+    These classes provide a list-like interface for adding, removing, and extending processors.
+    This is useful for creating reusable processors that can be extended by other processors.
+    When a mutable method (such as addition) is called on a processor, a new processor is returned,
+    leaving the original instance unchanged.
 
-        To add a single callable function to a Compose instance:
+    Example:
+    -------
+        >>> class CubeProcessor(Processor):
+        ...     def process_value(self, value, **context):
+        ...         return value ** 3
 
-        >>> compose_1 = Compose(sum)
-        >>> compose_2 = compose_1 + (lambda x: x * 2)
-        >>> compose_2([1, 2, 3, 4, 5])
-        30
+        >>> compose = Compose(CubeProcessor(), sum)
+        >>> compose([1, 2, 3, 4, 5])
+        225
 
-        To add a collection of processors to a Compose instance:
+    List-like interface Example:
+    ---------------------------
+        >>> compose = Compose(sum)
+        >>> compose_with_square = compose + (lambda x: x ** 2)
 
-        >>> processors = [sum, lambda x: x * 2]
-        >>> compose_1 = Compose(min, lambda x: [x])
-        >>> compose_2 = compose_1 + processors
-        >>> compose_2([1, 2, 3, 4, 5])
-        2
+        >>> compose([1, 2, 3, 4, 5])
+        15
+        >>> compose_with_square([1, 2, 3, 4, 5])
+        55
 
-        Note that above if lambda x: x * 2 is replaced with
-        lambda x: [x * 2] a list will be returned instead of an int.
-        This may or may not be desirable depending on the use case.
+    Compose vs MapCompose:
+    ----------------------
+        >>> def reverse(iterable):
+        ...     return iterable[::-1]
+
+        >>> map_compose = MapCompose(reverse)
+        >>> compose = Compose(reverse)
+
+        >>> map_compose(['hello', 'world'])
+        ['olleh', 'dlrow']
+        >>> compose(['hello', 'world'])
+        ['world', 'hello']
     """
 
     stop_on_none: bool = True
     default: Any = None
 
-    def __call__(self, values, loader_context=None) -> Any:
-
-        stop_on_none, default = self.unpack_context(loader_context)
-
-        wrapped_processors = [
-            wrap_context(processor, loader_context) for processor in self.processors
-        ]
+    def __call__(self, values, *wrapped_processors, **loader_context) -> Any:
+        stop_on_none, default = self.unpack_context(**loader_context)
 
         for processor in wrapped_processors:
-            if value is None and stop_on_none:
+            if values is None and stop_on_none:
                 return default
             try:
-                value = processor(value)
+                values = processor(values)
             except Exception as e:
                 raise ValueError(
                     "Error in Compose with "
-                    f"{str(processor)} value={value} "
+                    f"{str(processor)} values={values} "
                     f"error='{type(e).__name__}: {str(e)}'"
                 ) from e
-        return value
+        return values
