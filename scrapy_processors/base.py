@@ -721,6 +721,25 @@ class ContextMixin:
             return relevent_values[0]
         return relevent_values
 
+    # Moved from now deleted utils.py. May or may not need it later.
+    # def to_sets(*args: Any) -> Tuple[Set[Any], ...]:
+    #     """
+    #     Convert iterables to sets, place non-iterables into a set.
+    #     Returns a tuple of sets
+    #     """
+    #     sets = []
+    #     for arg in args:
+    #         if arg is None:
+    #             sets.append(set())
+    #         elif isinstance(arg, (list, tuple, set)):
+    #             sets.append(set(arg))
+    #         else:
+    #             sets.append({arg})
+
+    #     if len(sets) == 1:
+    #         return sets[0]
+    #     return tuple(sets)
+
     def call_with_context(self, func: Union[Type, Callable], **context):
         """
         default_context can be viewed as master kwargs, for the functions
