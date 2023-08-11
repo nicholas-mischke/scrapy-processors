@@ -39,7 +39,7 @@ def is_truthy(
         bool: True if the value is truthy, False if it is falsey.
     """
     for falsey_value in exclude:
-        if isinstance(value, type(falsey_value)) and value == falsey_value:
+        if isinstance(value, type(falsey_value)) and str(value) == str(falsey_value):
             return True
 
     if (
@@ -51,33 +51,34 @@ def is_truthy(
         return False
 
     for falsey_value in falsey_values:
-        if isinstance(value, type(falsey_value)) and value == falsey_value:
+        if isinstance(value, type(falsey_value)) and str(value) == str(falsey_value):
             return False
 
     return True
 
 
-class TakeAll(Processor):
+class TakeAll:
     """
     Identical to itemloaders.processors.Identity Processor.
     The name is more intuitive when using the processor as an output processor.
 
-    Default Context:
-    ----------------
-        None
-
-    Additional Context:
-    -------------------
-        None
-
     Example:
     --------
-        >>> processor = TakeAll()
-        >>> processor(['apple', 'banana', 'cherry'])
-        ['apple', 'banana', 'cherry']
+    >>> processor = TakeAll()
+    >>> processor(['apple', 'banana', 'cherry'])
+    ['apple', 'banana', 'cherry']
+    >>> processor('apple')
+    'apple' # Not ['apple'], but would be if it inherited from scrapy_processors.base.Processor
+
+    Note:
+    ----
+    This processor does not inherit from scrapy_processors.base.Processor.
+    This is because values is wrapped in a list if it's a single value.
+
+    This is also why it's __call__ signature is a little different.
     """
 
-    def __call__(self, values, **loader_context):
+    def __call__(self, values: List[Any]) -> List[Any]:
         return values
 
 
@@ -95,18 +96,22 @@ class TakeAllTruthy(Processor):
 
     Default Context:
     ----------------
-        - falsey_values (Tuple[Any]):
-            Defaults to (None, False, 0, 0.0, 0j, Decimal(0), Fraction(0, 1)).
-        - empty_iterables_are_falsey (bool): Determine if empty iterables are considered falsey.
-            Defaults to True.
-        - exclude (Optional[Iterable[Any]]): Types to exclude from the check.
-            Defaults to "Don't exclude any falsey values".
-        - default (Any): The default list to return when no truthy values exist. Defaults to an empty list.
-            Defaults to None.
+    - falsey_values (Tuple[Any]):
+        Defaults to (None, False, 0, 0.0, 0j, Decimal(0), Fraction(0, 1)).
+    - empty_iterables_are_falsey (bool): Determine if empty iterables are considered falsey.
+        Defaults to True.
+    - exclude (Optional[Iterable[Any]]): Types to exclude from the check.
+        Defaults to "Don't exclude any falsey values".
+    - default (Any): The default list to return when no truthy values exist. Defaults to an empty list.
+        Defaults to None.
 
     Additional Context:
     -------------------
-        None
+    None
+
+    Returns:
+    -------
+    List[Any]: A list of all truthy values.
 
     Example:
     --------
@@ -115,13 +120,13 @@ class TakeAllTruthy(Processor):
         ['Hello', 5]
     """
 
-    falsey_values: Tuple[Any] = (falsey_values,)
-    empty_iterables_are_falsey: bool = (True,)
-    exclude: Optional[Iterable[Any]] = ("Don't exclude any falsey values",)
+    falsey_values: Tuple[Any] = falsey_values
+    empty_iterables_are_falsey: bool = True
+    exclude: Optional[Iterable[Any]] = "Don't exclude any falsey values"
 
     default: Any = None  # value to return if all values are falsey
 
-    def __call__(self, values: Any, **loader_context) -> List[Any]:
+    def __call__(self, values, **loader_context) -> List[Any]:
         (
             falsey_values,
             empty_iterables_are_falsey,
@@ -131,8 +136,7 @@ class TakeAllTruthy(Processor):
 
         exclude = tuple() if exclude == "Don't exclude any falsey values" else exclude
         truthy = [
-            v
-            for v in values
+            v for v in values
             if is_truthy(v, falsey_values, empty_iterables_are_falsey, *exclude)
         ]
 
@@ -147,33 +151,37 @@ class TakeFirstTruthy(Processor):
 
     Default Context:
     ----------------
-        - falsey_values (Tuple[Any]):
-            Defaults to (None, False, 0, 0.0, 0j, Decimal(0), Fraction(0, 1)).
-        - empty_iterables_are_falsey (bool): Determine if empty iterables are considered falsey.
-            Defaults to True.
-        - exclude (Optional[Iterable[Any]]): Types to exclude from the check.
-            Defaults to "Don't exclude any falsey values".
-        - default (Any): The default list to return when no truthy values exist. Defaults to an empty list.
-            Defaults to None.
+    - falsey_values (Tuple[Any]):
+        Defaults to (None, False, 0, 0.0, 0j, Decimal(0), Fraction(0, 1)).
+    - empty_iterables_are_falsey (bool): Determine if empty iterables are considered falsey.
+        Defaults to True.
+    - exclude (Optional[Iterable[Any]]): Types to exclude from the check.
+        Defaults to "Don't exclude any falsey values".
+    - default (Any): The default list to return when no truthy values exist. Defaults to an empty list.
+        Defaults to None.
 
     Additional Context:
     -------------------
-        None
+    None
+
+    Returns:
+    -------
+    Any: The first truthy value.
 
     Example:
     --------
-        >>> processor = TakeFirstTruthy(default='No value')
-        >>> processor([0, False, None, [], 'Hello', 5])
-        'Hello'
+    >>> processor = TakeFirstTruthy()
+    >>> processor([0, False, None, [], 'Hello', 5])
+    'Hello'
     """
 
-    falsey_values: Tuple[Any] = (falsey_values,)
-    empty_iterables_are_falsey: bool = (True,)
-    exclude: Optional[Iterable[Any]] = ("Don't exclude any falsey values",)
+    falsey_values: Tuple[Any] = falsey_values
+    empty_iterables_are_falsey: bool = True
+    exclude: Optional[Iterable[Any]] = "Don't exclude any falsey values"
 
     default: Any = None  # value to return if all values are falsey
 
-    def __call__(self, values: Any, **loader_context) -> List[Any]:
+    def __call__(self, values: Any, **loader_context) -> Any:
         (
             falsey_values,
             empty_iterables_are_falsey,
@@ -194,24 +202,28 @@ class Coalesce(Processor):
 
     Default Context:
     ----------------
-        - default (Any): The value to return if all values are `None`. Defaults to `None`.
+    - default (Any): The value to return if all values are `None`. Defaults to `None`.
 
     Additional Context:
     -------------------
-        None
+    None
+
+    Returns:
+    -------
+    Any: The first non-None value.
 
     Example:
     --------
-        >>> processor = Coalesce(default='No values')
-        >>> processor([None, None, None, 'Hello', None])
-        'Hello'
-        >>> processor([None, None, None])
-        'No values'
+    >>> processor = Coalesce(default='No values')
+    >>> processor([None, None, None, 'Hello', None])
+    'Hello'
+    >>> processor([None, None, None])
+    'No values'
     """
 
     default: Any = None  # value to return if all values are None
 
-    def __call__(self, values, **loader_context):
+    def __call__(self, values, **loader_context) -> Any:
         for value in values:
             if value is not None:
                 return value
@@ -225,17 +237,21 @@ class Join(Processor):
 
     Default Context:
     ----------------
-        - separator (str): The separator to use when joining values. Defaults to a space (" ").
+    - separator (str): The separator to use when joining values. Defaults to a space (" ").
 
     Additional Context:
     -------------------
-        None
+    None
+
+    Returns:
+    -------
+    str: The joined string.
 
     Example:
     --------
-        >>> processor = Join(separator=', ')
-        >>> processor(['apple', 'banana', 'cherry'])
-        'apple, banana, cherry'
+    >>> processor = Join(separator=', ')
+    >>> processor(['apple', 'banana', 'cherry'])
+    'apple, banana, cherry'
     """
 
     separator: str = " "
@@ -250,17 +266,17 @@ class Flatten(Processor):
 
     Default Context:
     ----------------
-        None
+    None
 
     Additional Context:
     -------------------
-        None
+    None
 
     Example:
     --------
-        >>> processor = Flatten()
-        >>> processor([[1, 2], [3, 4], [5, 6]])
-        [1, 2, 3, 4, 5, 6]
+    >>> processor = Flatten()
+    >>> processor([[1, 2], [3, 4], [5, 6]])
+    [1, 2, 3, 4, 5, 6]
     """
 
     def __call__(self, values, **loader_context) -> List[Any]:

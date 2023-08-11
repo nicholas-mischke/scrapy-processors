@@ -4,14 +4,14 @@ import json
 import pytz
 
 from scrapy_processors import (
-    StringToDateTime, TakeFirstTruthy, MapCompose,
+    DateTime, TakeFirstTruthy, MapCompose,
     SelectJmes, NormalizeNumericString, PriceParser,
     UnicodeEscape, StripQuotes, NormalizeWhitespace
 )
 
 
 class DateTimeItemLoader(ItemLoader):
-    default_input_processor = StringToDateTime(input_tz=pytz.UTC)
+    default_input_processor = DateTime(input_tz=pytz.UTC)
     default_output_processor = TakeFirstTruthy()
 
 
@@ -54,8 +54,12 @@ class JsonItemLoader2(ItemLoader):
     # Can replace a processor at a specific index and return a new instance of MapCompose
     # Adding two MapCompose together and an additional processor func.
     # Returns new instance of MapCompose
-    default_input_processor = select_jmes.replace_processor(
+    default_input_processor = select_jmes.replace(
         1, SelectJmes('name')
     ) + clean_text + str.title
 
     default_output_processor = TakeFirstTruthy()
+
+if __name__ == '__main__':
+    from pprint import pprint
+    print(JsonItemLoader2().default_input_processor)

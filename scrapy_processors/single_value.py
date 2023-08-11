@@ -64,6 +64,11 @@ class UnicodeEscape(Processor):
     """
     Processor to encode and decode strings, converting escape sequences into their respective characters.
 
+    Note:
+    -----
+    Some escape sequences in this docstring will not display properly in the rendered docs.
+    If the escape sequences are not visible, please refer to the source code.
+
     Description:
     ------------
     This class takes a string input and returns it with escape sequences such as '\\n', '\\t', etc.
@@ -71,24 +76,24 @@ class UnicodeEscape(Processor):
 
     Default Context:
     ----------------
-        - encoding (str): The string encoding format. Default is 'utf-8'.
-        - encoding_errors (str): The policy for encoding errors. If set to 'ignore', errors will be ignored. If set to 'strict', encoding errors raise a UnicodeError. Default is 'backslashreplace'.
-        - decoding (str): The decoding format. Default is 'unicode_escape'.
-        - decoding_errors (str): The policy for decoding errors. Default is 'strict'.
+    - encoding (str): The string encoding format. Default is 'utf-8'.
+    - encoding_errors (str): The policy for encoding errors. If set to 'ignore', errors will be ignored. If set to 'strict', encoding errors raise a UnicodeError. Default is 'backslashreplace'.
+    - decoding (str): The decoding format. Default is 'unicode_escape'.
+    - decoding_errors (str): The policy for decoding errors. Default is 'strict'.
 
     Additional Context:
     -------------------
-        None
-
-    Example:
-    --------
-        >>> processor = UnicodeEscape()
-        >>> processor.process_value('hello\\nworld')  # 'hello\\nworld' is now 'hello\nworld'
-        'hello\nworld'
+    None
 
     Returns:
     --------
-        str: The input string with escape sequences converted to respective characters.
+    str: The input string with escape sequences converted to respective characters.
+
+    Example:
+    --------
+    >>> processor = UnicodeEscape()
+    >>> processor.process_value('hello\\nworld')  # 'hello\\nworld' is now 'hello\nworld'
+    'hello\nworld'
     """
 
     encoding: str = "utf-8"
@@ -113,29 +118,45 @@ class NormalizeWhitespace(Processor):
 
     leading and trailing whitespaces are removed.
 
-    leading whitespaces are removed from lstrip_chars.
-    trailing whitespaces are removed from rstrip_chars.
+    - leading whitespaces are removed from lstrip_chars.
+    - trailing whitespaces are removed from rstrip_chars.
+    - leading and trailing whitespaces are removed from strip_chars.
 
     Default Context:
     ----------------
-        - lstrip_chars (Set[str]): Punctuation characters that should not have whitespace to their left.
-        - rstrip_chars (Set[str]): Punctuation characters that should not have whitespace to their right.
-        - strip_chars (Set[str]): Punctuation characters that should not have whitespace on either side.
-        - other_chars (Set[str]): Other special characters to be considered.
+    - lstrip_chars (Set[str]): Punctuation characters that should not have whitespace to their left.
+    - lstrip_chars_add (Set[str]): Additional punctuation characters that should not have whitespace to their left.
+    - listrip_chars_ignore (Set[str]): Punctuation characters to ignore.
 
-    Example:
-    --------
-        >>> processor = NormalizeWhitespace()
-        >>> processor.process_value('This is a sentence !')  # 'This is a sentence!' without space before '!'
-        'This is a sentence!'
+    - rstrip_chars (Set[str]): Punctuation characters that should not have whitespace to their right.
+    - rstrip_chars_add (Set[str]): Additional punctuation characters that should not have whitespace to their right.
+    - rstrip_chars_ignore (Set[str]): Punctuation characters to ignore.
 
-        >>> processor.process_value('$ 100')  # '$100' without space after '$'
-        '$100'
+    - strip_chars (Set[str]): Punctuation characters that should not have whitespace on either side.
+    - strip_chars_add (Set[str]): Additional punctuation characters that should not have whitespace on either side.
+    - strip_chars_ignore (Set[str]): Punctuation characters to ignore.
+
+    - other_chars (Set[str]): Here more for documentation, than functionality.
+
+    Additional Context:
+    -------------------
+    None
 
     Returns:
     --------
-        str: The input string with normalized whitespace.
+    str: The input string with normalized whitespace.
 
+    Example:
+    --------
+    >>> processor = NormalizeWhitespace()
+    >>> processor.process_value('This \n     is a \t\t   sentence !')
+    'This is a sentence!'
+    ...
+    >>> processor.process_value('$ 100')
+    '$100'
+
+    Notes:
+    ------
     Assumes utf8, utf16, ascii or latin-1 encoding.
     """
 
@@ -210,11 +231,12 @@ class NormalizeWhitespace(Processor):
 
         # Step 3) Normalize whitespace around punctuation
 
-        context = self.unpack_context_to_sets(**context)
+        context = self.unpack_context(**context)
 
         # Remove trailing whitespaces from lstrip_punctuation
         # "This is a sentence !" --> "This is a sentence!"
         lstrip, add, ignore = context[:3]
+        lstrip, add, ignore = set(lstrip), set(add), set(ignore)
         chars = lstrip.union(add).difference(ignore)
         pattern = r"\s*(?=" + regex_chars(chars) + r")"
         value = re.sub(pattern, "", value)
@@ -222,6 +244,7 @@ class NormalizeWhitespace(Processor):
         # Remove leading whitespaces from rstrip_punctuation
         # "$ 100" --> "$100"
         rstrip, add, ignore = context[3:6]
+        rstrip, add, ignore = set(rstrip), set(add), set(ignore)
         chars = rstrip.union(add).difference(ignore)
         pattern = r"(?<=" + regex_chars(chars) + r")\s*"
         value = re.sub(pattern, "", value)
@@ -229,6 +252,7 @@ class NormalizeWhitespace(Processor):
         # Remove leading and trailing whitespaces from strip_punctuation
         # "Sandwitch - The - Hyphens" --> "Sandwitch-The-Hyphens"
         strip, add, ignore = context[6:9]
+        strip, add, ignore = set(strip), set(add), set(ignore)
         chars = strip.union(add).difference(ignore)
         pattern = r"\s*(" + regex_chars(chars) + r")\s*"
         value = re.sub(pattern, r"\1", value)
@@ -248,23 +272,27 @@ class CharWhitespacePadding(Processor):
 
     Default Context:
     ----------------
-        - chars (Set[str]): The characters around which to add padding.
-        - lpad (int): The number of spaces to add to the left of the character. Default is 1.
-        - rpad (int): The number of spaces to add to the right of the character. Default is 1.
+    - chars (Set[str]): The characters around which to add padding.
+    - lpad (int): The number of spaces to add to the left of the character. Default is 1.
+    - rpad (int): The number of spaces to add to the right of the character. Default is 1.
 
-    Example:
-    --------
-        >>> processor = CharWhitespacePadding(('-', '='), lpad=1, rpad=1)
-        >>> processor.process_value('7   - 3  = 4')
-        '7 - 3 = 4'
-
-        >>> processor = CharWhitespacePadding(chars=('>', '='), lpad=1, rpad=1)
-        >>> processor.process_value(['7*3=21', '7-3=4']) # ['7 * 3 = 21', '7 - 3 = 4']
-        ['7 * 3 = 21', '7 - 3 = 4']
+    Additional Context:
+    -------------------
+    None
 
     Returns:
     --------
-        str: The input string with padding added around the specified characters.
+    str: The input string with padding added around the specified characters.
+
+    Example:
+    --------
+    >>> processor = CharWhitespacePadding(('-', '='), lpad=1, rpad=1)
+    >>> processor.process_value('7   - 3  = 4')
+    '7 - 3 = 4'
+
+    >>> processor = CharWhitespacePadding(chars=('*', '-', '='), lpad=1, rpad=1)
+    >>> processor.process_value(['7*3=21', '7-3=4'])
+    ['7 * 3 = 21', '7 - 3 = 4']
     """
 
     chars: Union[str, Set[str]] = set()
@@ -294,33 +322,33 @@ class StripQuotes(Processor):
 
     Default Context:
     ----------------
-        - quotes (Set[str]): A set of quote marks to remove.
-        - quotes_add (Set[str]): Additional quote marks to remove.
-        - quotes_ignore (Set[str]): Quote marks to ignore.
+    - quotes (Set[str]): A set of quote marks to remove.
+    - quotes_add (Set[str]): Additional quote marks to remove.
+    - quotes_ignore (Set[str]): Quote marks to ignore.
 
-        - ticks (Set[str]): A set of tick marks to remove.
-        - ticks_add (Set[str]): Additional tick marks to remove.
-        - ticks_ignore (Set[str]): Tick marks to ignore.
+    - ticks (Set[str]): A set of tick marks to remove.
+    - ticks_add (Set[str]): Additional tick marks to remove.
+    - ticks_ignore (Set[str]): Tick marks to ignore.
 
-        - symbols_ignore (Set[str]): Either quote marks or tick marks to ignore.
+    - symbols_ignore (Set[str]): Either quote marks or tick marks to ignore.
 
     Additional Context:
     -------------------
-        None
+    None
 
     Returns:
     --------
-        str: The input string with leading and trailing quote marks removed.
+    str: The input string with leading and trailing quote marks removed.
 
     Example:
     --------
-        >>> processor = StripQuotes()
-        >>> processor.process_value('"Hello, world!"')
-        'Hello, world!'
+    >>> processor = StripQuotes()
+    >>> processor.process_value('"Hello, world!"')
+    'Hello, world!'
 
-        >>> processor = StripQuotes()
-        >>> processor(['"😂"', '‘🥰’', '“👍”'])
-        ['😂', '🥰', '👍']
+    >>> processor = StripQuotes()
+    >>> processor(['"😂"', '‘🥰’', '“👍”'])
+    ['😂', '🥰', '👍']
     """
 
     quotes: Set[str] = {
@@ -360,11 +388,15 @@ class StripQuotes(Processor):
     symbols_ignore: Set[str] = set()
 
     def process_value(self, value: str, **context) -> str:
-        context = self.unpack_context_to_sets(**context)
+        context = self.unpack_context(**context)
 
         quotes, quotes_add, quotes_ignore = context[:3]
         ticks, ticks_add, ticks_ignore = context[3:6]
         ignore = context[6]
+
+        quotes, quotes_add, quotes_ignore = set(quotes), set(quotes_add), set(quotes_ignore)
+        ticks, ticks_add, ticks_ignore = set(ticks), set(ticks_add), set(ticks_ignore)
+        ignore = set(ignore)
 
         quotes = quotes.union(quotes_add).difference(quotes_ignore)
         ticks = ticks.union(ticks_add).difference(ticks_ignore)
@@ -385,29 +417,27 @@ class RemoveHTMLTags(Processor):
     extract only the text content. The BeautifulSoup library is used to parse and
     remove the HTML tags.
 
-    Note: This processor does not remove the content inside the HTML tags.
-
     Default Context:
     ----------------
-        None
+    None
 
     Additional Context:
     -------------------
-        None
+    None
 
     Returns:
     --------
-        str: The input string with all HTML tags removed.
+    str: The input string with all HTML tags removed.
 
     Example:
     --------
-        >>> processor = RemoveHTMLTags()
-        >>> processor.process_value('<p>Hello, world!</p>')
-        'Hello, world!'
+    >>> processor = RemoveHTMLTags()
+    >>> processor.process_value('<p>Hello, world!</p>')
+    'Hello, world!'
 
-        >>> processor = RemoveHTMLTags()
-        >>> processor(['<p>Foo</p>', '<div>Bar</div>', '<span>Baz</span>'])
-        ['Foo', 'Bar', 'Baz']
+    >>> processor = RemoveHTMLTags()
+    >>> processor(['<p>Foo</p>', '<div>Bar</div>', '<span>Baz</span>'])
+    ['Foo', 'Bar', 'Baz']
     """
 
     def process_value(self, value: str, **context) -> str:
@@ -426,30 +456,30 @@ class Demojize(Processor):
 
     Default Context:
     ----------------
-        None
+    None
 
     Additional Context:
     -------------------
-        - delimiters (Optional[Tuple[str, str]]): The delimiters used to identify emojis. Default is (':', ':').
-        - language (Optional[str]): The language used for shortcodes. Default is 'en'.
-        - version (Optional[Union[str, int]]): The emoji version. Default is None.
-        - handle_version (Optional[Union[str, Callable[[str, dict], str]]]): A custom function to handle versions. Default is None.
+    - delimiters (Optional[Tuple[str, str]]): The delimiters used to identify emojis. Default is (':', ':').
+    - language (Optional[str]): The language used for shortcodes. Default is 'en'.
+    - version (Optional[Union[str, int]]): The emoji version. Default is None.
+    - handle_version (Optional[Union[str, Callable[[str, dict], str]]]): A custom function to handle versions. Default is None.
 
     Returns:
     --------
-        str: The input string with Unicode emojis replaced by their respective shortcodes.
+    str: The input string with Unicode emojis replaced by their respective shortcodes.
 
     Example:
     --------
-        >>> processor = Demojize()
-        >>> processor.process_value('Hello, world! 😄')
-        'Hello, world! :grinning_face_with_big_eyes:'
-        >>> processor(['😂', '🥰', '👍'])
-        [':face_with_tears_of_joy:', ':smiling_face_with_hearts:', ':thumbs_up:']
+    >>> processor = Demojize()
+    >>> processor.process_value('Hello, world! 😄')
+    'Hello, world! :grinning_face_with_big_eyes:'
+    >>> processor(['😂', '🥰', '👍'])
+    [':face_with_tears_of_joy:', ':smiling_face_with_hearts:', ':thumbs_up:']
 
     Method Signatures:
     ------------------
-        - emoji.demojize(string, delimiters=(':', ':'), language='en', version=None, handle_version=None)
+    - emoji.demojize(string, delimiters=(':', ':'), language='en', version=None, handle_version=None)
 
     References:
     ------------
@@ -471,32 +501,32 @@ class RemoveEmojis(Processor):
 
     Default Context:
     ----------------
-        None
+    None
 
     Additional Context:
     -------------------
-        - replace (Optional[Union[str, Callable[[str, dict], str]]]): Replacement value for emojis. Default is an empty string.
-        - version (Optional[int]): Emoji version to consider. Default is -1 (all versions).
+    - replace (Optional[Union[str, Callable[[str, dict], str]]]): Replacement value for emojis. Default is an empty string.
+    - version (Optional[int]): Emoji version to consider. Default is -1 (all versions).
 
     Returns:
     --------
-        str: The input string with all emojis removed.
+    str: The input string with all emojis removed.
 
     Example:
     --------
-        >>> processor = RemoveEmojis()
-        >>> processor.process_value('Hello, world! 😄')
-        'Hello, world! '
-        >>> processor(['😂', 'I love you! 🥰', '👍'])
-        ['', 'I love you! ', '']
+    >>> processor = RemoveEmojis()
+    >>> processor.process_value('Hello, world! 😄')
+    'Hello, world! '
+    >>> processor(['😂', 'I love you! 🥰', '👍'])
+    ['', 'I love you! ', '']
 
     Method Signatures:
     ------------------
-        - emoji.get_emoji_regexp(version=-1)
+    - emoji.get_emoji_regexp(version=-1)
 
     References:
     ------------
-        - https://pypi.org/project/emoji/
+    https://pypi.org/project/emoji/
     """
 
     def process_value(self, value: str, **context) -> str:
@@ -516,25 +546,25 @@ class ExtractDigits(Processor):
 
     Default Context:
     ----------------
-        separators (Iterable[str]): A set of characters used as separators in the numbers.
-            Defaults to {",", "."}.
+    - separators (Iterable[str]): A set of characters used as separators in the numbers.
+        Defaults to {",", "."}.
 
     Returns:
     --------
-        A list of strings representing the numbers found in the input string.
+    A list of strings representing the numbers found in the input string.
 
     Example:
     --------
-        >>> processor = ExtractDigits()
-        >>> processor.process_value("Price: $123,456.78, Phone: +123-456-7890")
-        ['123,456.78', '123', '456', '7890']
-        >>> processor.process_value("In stock (22 available)") # books.toscrape.com
-        ['22']
+    >>> processor = ExtractDigits()
+    >>> processor.process_value("Price: $123,456.78, Phone: +123-456-7890")
+    ['123,456.78', '123', '456', '7890']
+    >>> processor.process_value("In stock (22 available)") # books.toscrape.com
+    ['22']
     """
 
     separators: Iterable[str] = {",", "."}
 
-    def process_value(self, value, **context) -> List[str]:
+    def process_value(self, value: str, **context) -> List[str]:
         separators, *_ = self.unpack_context(**context)
 
         separators = [re.escape(s) for s in separators]
@@ -555,28 +585,27 @@ class NormalizeNumericString(Processor):
 
     Default Context:
     ----------------
-        thousands_separator (str): The thousands separator to use in the output string. Default is ''.
-        decimal_separator (str): The decimal separator to use in the output string. Default is '.'.
-        decimal_places (Optional[int]): The number of decimal places to maintain in the output string. Default is None (no rounding).
-        keep_trailing_zeros (bool): If False, trailing zeros after the decimal point are removed. Deafult is False
-        input_decimal_separator (Optional[str]): The decimal separator used in the input string.
-            Default is None, leaving PriceParser.fromstring to guess.
+    - thousands_separator (str): The thousands separator to use in the output string. Default is ''.
+    - decimal_separator (str): The decimal separator to use in the output string. Default is '.'.
+    - decimal_places (Optional[int]): The number of decimal places to maintain in the output string. Default is None (no rounding).
+    - keep_trailing_zeros (bool): If False, trailing zeros after the decimal point are removed. Deafult is False
+    - input_decimal_separator (Optional[str]): The decimal separator used in the input string.
+        Default is None, leaving PriceParser.fromstring to guess.
 
     Returns:
     --------
-        str: A string representing the number in the desired format.
+    str: A string representing the number in the desired format.
 
     Example:
     --------
-        >>> processor = NormalizeNumericString(thousands_sep=',', decimal_sep='.', decimal_places=2)
-        >>> processor('1 000 000,00')  # passing a single string to the instance
-        '1,000,000.00'
+    >>> processor = NormalizeNumericString(thousands_sep=',', decimal_sep='.', decimal_places=2)
+    >>> processor.process_value('1 000 000,00')
+    '1,000,000.00'
 
     Method Signatures:
     -------------------
-        price_parser.Price.fromstring(cls, price, currency_hint=None, decimal_separator=None)
-
-        `decimal_seperator` in this signature is `input_decimal_separator` in context.
+    -price_parser.Price.fromstring(cls, price, currency_hint=None, decimal_separator=None)
+    `decimal_seperator` in this signature is `input_decimal_separator` in context.
 
     References:
     -----------
@@ -590,7 +619,7 @@ class NormalizeNumericString(Processor):
 
     input_decimal_separator: Optional[str] = None
 
-    def process_value(self, value, **context) -> str:
+    def process_value(self, value: str, **context) -> str:
         context = self.unpack_context(**context)
 
         thousands_separator, decimal_separator = context[:2]
@@ -637,42 +666,42 @@ class NormalizeNumericString(Processor):
 
 class PriceParser(Processor):
     """
-    Processor that takes a string representing a price and returns a price_parser.Price object.
+    Processor that takes a string representing a price and returns a price_parser.Price class.
 
     Description:
     ------------
     This processor is useful when you have price data in string format and you want to extract
     the price information, such as the amount and currency.
 
-    The conversion relies on the price_parser.Price.fromstring method, and the behavior of the conversion
-    can be customized by providing additional keys in the loader_context or by setting
-    them as default_context when subclassing or constructing an instance of this class.
+    The conversion relies on the ``price_parser.Price.fromstring`` method, and the behavior of the conversion
+    can be customized by providing additional keys in the ``loader_context`` or by setting
+    them as ``default_context`` when subclassing or constructing an instance of this class.
 
     Default Context:
     ----------------
-        None
+    None
 
     Additional Context:
-    --------------------------
-        - currency_hint (Optional[str]): A string representing the currency to use when parsing the price.
-            If not provided, the currency will be guessed by the price_parser library.
-        - decimal_separator (Optional[str]): The decimal separator to use when parsing the price.
-            If not provided, the decimal separator will be guessed by the price_parser library.
+    -------------------
+    - currency_hint (Optional[str]): A string representing the currency to use when parsing the price.
+        If not provided, the currency will be guessed by the price_parser library.
+    - decimal_separator (Optional[str]): The decimal separator to use when parsing the price.
+        If not provided, the decimal separator will be guessed by the price_parser library.
 
     Returns:
     -------
-        price_parser.Price: An object representing the parsed price, including the amount and currency.
+    price_parser.Price: An object representing the parsed price, including the amount and currency.
 
     Example:
     --------
-        >>> processor = PriceParser()
-        >>> result = processor('$19.99')  # passing a single string to the instance
-        >>> print(result.amount)  # Output: 19.99
-        >>> print(result.currency)  # Output: '$'
+    >>> processor = PriceParser()
+    >>> result = processor.process_value('$19.99')  # passing a single string to the instance
+    >>> print(result.amount)  # Output: 19.99
+    >>> print(result.currency)  # Output: '$'
 
     Method Signatures:
     -------------------
-        - price_parser.Price.fromstring(cls, price, currency_hint=None, decimal_separator=None)
+    - price_parser.Price.fromstring(cls, price, currency_hint=None, decimal_separator=None)
 
     References:
     -----------
@@ -690,34 +719,38 @@ class ToFloat(Processor):
 
     Description:
     ------------
-    The conversion relies on the price_parser.Price.fromstring method, and the behavior of the conversion
-    can be customized by providing additional keys in the loader_context or by setting
-    them as the default_context when subclassing this class.
+    The conversion relies on the ``price_parser.Price.fromstring`` method, and the behavior of the conversion
+    can be customized by providing additional keys in the ``loader_context`` or by setting
+    them as the ``default_context`` when subclassing or constructing an instance of this class.
 
     Default Context:
     ----------------
-        decimal_places (Optional[int]): The number of decimal places to round the result to.
-            If not provided, the result will not be rounded.
+    - decimal_places (Optional[int]): The number of decimal places to round the result to.
+        If not provided, the result will not be rounded.
 
     Additional Loader Context:
     --------------------------
-        decimal_separator (Optional[str]): The decimal separator to use when parsing the price.
-            If not provided, the decimal separator will be guessed by the price_parser library.
+    - decimal_separator (Optional[str]): The decimal separator to use when parsing the price.
+        If not provided, the decimal separator will be guessed by the price_parser library.
 
     Returns:
     --------
-        float: The float representation of the input string.
+    float: The float representation of the input string.
 
     Example Usage:
     --------------
-        >>> processor = StringToFloat(decimal_places=2)
-        >>> processor.process_value("$123.456")
-        123.46
+    >>> processor = StringToFloat(decimal_places=2)
+    >>> processor.process_value("$123.456")
+    123.46
 
     Method Signatures:
     -------------------
-        price_parser.Price.fromstring(cls, price, currency_hint=None, decimal_separator=None)
-        round(number, decimal_places) <-- python built-in function, number from price_parser.Price.amount_float
+    - price_parser.Price.fromstring(cls, price, currency_hint=None, decimal_separator=None)
+    - round(number, decimal_places) <-- python built-in function, number from price_parser.Price.amount_float
+
+    References:
+    -----------
+    https://pypi.org/project/price-parser/
     """
 
     decimal_places: Optional[int] = None
@@ -739,53 +772,49 @@ class DateTimeExtraordinaire(Processor):
 
     Description:
     ------------
-    The conversion relies on the dateparser.parse method, and the behavior of the conversion
-    can be customized by providing additional keys in the loader_context or by setting
-    them as default_context when subclassing or constructing an instance of this class.
+    The conversion relies on the ``dateparser.parse`` method, and the behavior of the conversion
+    can be customized by providing additional keys in the ``loader_context`` or by setting
+    them as ``default_context`` when subclassing or constructing an instance of this class.
 
     This class is more flexible than the DateTime class because it can handle a
     wider variety of date and time formats without the need to pass context on slight changes in formats.
 
-    Input Value:
-    ------------
-        - date_string (str): A string representing a date and/or time.
-
     Default Context:
     ----------------
-        - output_tz (pytz.BaseTzInfo): The timezone to convert the datetime object to. Default is pytz.UTC.
+    - output_tz (pytz.BaseTzInfo): The timezone to convert the datetime object to. Default is pytz.UTC.
 
     Additional Loader Context:
     --------------------------
-        - date_formats (Optional[List[str]]): A list of format strings using directives as given
-        - languages (Optional[List[str]]): A list of language codes, e.g. ['en', 'es', 'zh-Hant'].
-        - locales (Optional[List[str]]): A list of locale codes, e.g. ['fr-PF', 'qu-EC', 'af-NA'].
-        - region (Optional[str]): A region code, e.g. 'IN', '001', 'NE'.
-        - settings (Optional[Union[Settings, Dict[str, Any]] ]): Configure customized behavior using settings defined in :mod:`dateparser.conf.Settings`.
-        - detect_languages_function (Optional[Callable[[str, float], List[str]]]): A function for language detection that takes as input a string (the `date_string`) and
+    - date_formats (Optional[List[str]]): A list of format strings using directives as given
+    - languages (Optional[List[str]]): A list of language codes, e.g. ['en', 'es', 'zh-Hant'].
+    - locales (Optional[List[str]]): A list of locale codes, e.g. ['fr-PF', 'qu-EC', 'af-NA'].
+    - region (Optional[str]): A region code, e.g. 'IN', '001', 'NE'.
+    - settings (Optional[Union[Settings, Dict[str, Any]] ]): Configure customized behavior using settings defined in :mod:`dateparser.conf.Settings`.
+    - detect_languages_function (Optional[Callable[[str, float], List[str]]]): A function for language detection that takes as input a string (the `date_string`) and
 
     Returns:
     --------
-        datetime: The datetime representation of the input string.
+    datetime: The datetime representation of the input string.
 
     Example Usage:
     --------------
-        >>> processor = DateTimeExtraordinaire()
-        >>> processor.process_value("12/12/12")
-        2012-12-12 06:00:00+00:00
-        >>> processor.process_value("Le 11 Décembre 2014 à 09:00")  # French (11 December 2014 at 09:00)
-        2014-12-11 15:00:00+00:00
+    >>> processor = DateTimeExtraordinaire()
+    >>> processor.process_value("12/12/12")
+    2012-12-12 06:00:00+00:00
+    >>> processor.process_value("Le 11 Décembre 2014 à 09:00")  # French (11 December 2014 at 09:00)
+    2014-12-11 15:00:00+00:00
 
     Method Signatures:
     -------------------
-        >>> dateparser.parse(
-            date_string, # Scraped value goes here.
-            date_formats=None,
-            languages=None,
-            locales=None,
-            region=None,
-            settings=None,
-            detect_languages_function=None
-        ): ...
+    >>> dateparser.parse(
+        date_string, # Scraped value goes here.
+        date_formats=None,
+        languages=None,
+        locales=None,
+        region=None,
+        settings=None,
+        detect_languages_function=None
+    ): ...
 
     References:
     -----------
@@ -806,35 +835,39 @@ class DateTime(Processor):
 
     Description:
     ------------
-    This class uses the strptime() method to convert a string into a datetime object
+    This class uses the ``strptime()`` method to convert a string into a datetime object
     based on a specified format. By default, the format is set to '%Y-%m-%d, %H:%M:%S'.
 
     Default Context:
     ----------------
-        - format (str): The date and time format string. Defaults to '%Y-%m-%d, %H:%M:%S'.
-        - input_tz (pytz.BaseTzInfo): The timezone for input datetime. Defaults to local timezone.
-        - output_tz (pytz.BaseTzInfo): The timezone to convert the datetime object to. Default is UTC.
+    - format (str): The date and time format string. Defaults to '%Y-%m-%d, %H:%M:%S'.
+    - input_tz (pytz.BaseTzInfo): The timezone for input datetime. Defaults to local timezone.
+    - output_tz (pytz.BaseTzInfo): The timezone to convert the datetime object to. Default is UTC.
+
+    Additional Context:
+    -------------------
+    None
 
     Returns:
     --------
-        datetime: The datetime object represented by the input string.
+    datetime: The datetime object represented by the input string.
 
     Example:
     --------
-        >>> processor = DateTime()
-        >>> processor.process_value('2023-05-22, 12:30:45')  # passing a single string to the instance
-        datetime.datetime(2023, 5, 22, 12, 30, 45)
+    >>> processor = DateTime()
+    >>> processor.process_value('2023-05-22, 12:30:45')  # passing a single string to the instance
+    datetime.datetime(2023, 5, 22, 12, 30, 45)
 
-        >>> DateTime(format='%d/%m/%Y %H:%M')
-        >>> processor(['22/05/2023 12:30', '23/05/2023 13:45'])  # passing a list of strings to the instance
-        [datetime.datetime(2023, 5, 22, 12, 30), datetime.datetime(2023, 5, 23, 13, 45)]
+    >>> DateTime(format='%d/%m/%Y %H:%M')
+    >>> processor(['22/05/2023 12:30', '23/05/2023 13:45'])  # passing a list of strings to the instance
+    [datetime.datetime(2023, 5, 22, 12, 30), datetime.datetime(2023, 5, 23, 13, 45)]
     """
 
     format: str = "%Y-%m-%d, %H:%M:%S"
     input_tz: pytz.BaseTzInfo = pytz.timezone(str(get_localzone()))
     output_tz: pytz.BaseTzInfo = pytz.UTC
 
-    def process_value(self, value, **context) -> datetime:
+    def process_value(self, value: str, **context) -> datetime:
         format_str, input_tz, output_tz, *_ = self.unpack_context(**context)
 
         # Get datetime object from string
@@ -853,31 +886,31 @@ class Date(Processor):
 
     Description:
     ------------
-    This class uses the strptime() method to convert a string into a datetime object
-    and then extracts the date component based on a specified format.
-    By default, the format is set to '%Y-%m-%d'.
+    This class uses the ``strptime()`` method to convert a string into a
+    ``datetime.date`` object and then extracts the date component based on a
+    specified format.
 
     Default Context:
     ----------------
-        - format (str): The date format string. Defaults to '%Y-%m-%d'.
+    - format (str): The date format string. Defaults to '%Y-%m-%d'.
 
     Additional Context:
     -------------------
-        None
+    None
 
     Returns:
     --------
-        date: The date object represented by the input string.
+    date: The date object represented by the input string.
 
     Example:
     --------
-        >>> processor = Date()
-        >>> processor.process_value('2023-05-22')  # passing a single string to the instance
-        datetime.date(2023, 5, 22)
+    >>> processor = Date()
+    >>> processor.process_value('2023-05-22')  # passing a single string to the instance
+    datetime.date(2023, 5, 22)
 
-        >>> processor = Date(format='%d/%m/%Y')
-        >>> processor(['22/05/2023', '23/05/2023'])  # passing a list of strings to the instance
-        [datetime.date(2023, 5, 22), datetime.date(2023, 5, 23)]
+    >>> processor = Date(format='%d/%m/%Y')
+    >>> processor(['22/05/2023', '23/05/2023'])  # passing a list of strings to the instance
+    [datetime.date(2023, 5, 22), datetime.date(2023, 5, 23)]
     """
 
     format: str = "%Y-%m-%d"
@@ -898,22 +931,22 @@ class Time(Processor):
 
     Default Context:
     ----------------
-        - format (str): The format of the time string.
-            Defaults to '%H:%M:%S', which corresponds to hour:minute:second.
+    - format (str): The format of the time string.
+        Defaults to '%H:%M:%S', which corresponds to hour:minute:second.
 
     Returns:
     --------
-        datetime.time: The time object representing the time in the input string.
+    datetime.time: The time object representing the time in the input string.
 
     Example:
     --------
-        >>> processor = Time(format='%H:%M:%S')
-        >>> processor('14:35:20')  # passing a single string to the instance
-        datetime.time(14, 35, 20)
+    >>> processor = Time(format='%H:%M:%S')
+    >>> processor.process_value('14:35:20')  # passing a single string to the instance
+    datetime.time(14, 35, 20)
 
-        >>> processor = Time(format='%H:%M')
-        >>> processor(['14:35', '18:40'])  # passing a list of strings to the instance
-        [datetime.time(14, 35), datetime.time(18, 40)]
+    >>> processor = Time(format='%H:%M')
+    >>> processor(['14:35', '18:40'])  # passing a list of strings to the instance
+    [datetime.time(14, 35), datetime.time(18, 40)]
     """
 
     format: str = "%H:%M:%S"
@@ -940,24 +973,28 @@ class Emails(Processor):
 
     Default Context:
     ----------------
-        domain (Optional[str]): The email domain to filter by. If provided, only emails with this domain will be returned.
-            Default is None, meaning that all email addresses will be extracted.
-        contains (Optional[str]): A string that the extracted emails must contain.
-            If provided, only emails containing this string will be returned.
+    - domain (Optional[str]): The email domain to filter by. If provided, only emails with this domain will be returned.
+        Default is None, meaning that all email addresses will be extracted.
+    - contains (Optional[str]): A string that the extracted emails must contain.
+        If provided, only emails containing this string will be returned.
+
+    Additional Context:
+    -------------------
+    None
 
     Returns:
     --------
-        List[str]: A list of extracted email addresses. If the 'domain' parameter is provided, only email addresses with that domain will be returned.
+    List[str]: A list of extracted email addresses. If the 'domain' parameter is provided, only email addresses with that domain will be returned.
 
     Example:
     --------
-        >>> processor = ExtractEmails()
-        >>> processor('Contact us at support@example.com and sales@example.com.')
-        ['support@example.com', 'sales@example.com']
+    >>> processor = ExtractEmails()
+    >>> processor.process_value('Contact us at support@example.com and sales@example.com.')
+    ['support@example.com', 'sales@example.com']
 
-        >>> processor_with_domain = ExtractEmails(domain="example.com")
-        >>> processor_with_domain('Contact us at support@example.com and sales@other.com.')
-        ['support@example.com']
+    >>> processor_with_domain = ExtractEmails(domain="example.com")
+    >>> processor_with_domain('Contact us at support@example.com and sales@other.com.')
+    ['support@example.com']
     """
 
     domain: Optional[str] = None
@@ -967,7 +1004,7 @@ class Emails(Processor):
         _, domain = email.split("@")
         return domain
 
-    def process_value(self, value, **context) -> List[str]:
+    def process_value(self, value:str, **context) -> List[str]:
         domain, contains, *_ = self.unpack_context(**context)
         emails = re.findall(r"[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+", value)
 
@@ -990,31 +1027,31 @@ class PhoneNumbers(Processor):
 
     Default Context:
     ----------------
-        region (str): The region that the phone number is being dialed from. Default is "US".
-        num_format (phonenumbers.PhoneNumberFormat): The format that the phone number should be returned in.
-            Default is E.164. Other options are INTERNATIONAL, NATIONAL, and RFC3966.
+    - region (str): The region that the phone number is being dialed from. Default is "US".
+    - num_format (phonenumbers.PhoneNumberFormat): The format that the phone number should be returned in.
+        Default is E.164. Other options are INTERNATIONAL, NATIONAL, and RFC3966.
 
     Additional Loader Context:
     --------------------------
-        leniency (phonenumbers.Leniency): The leniency to use when matching phone numbers.
-            Default is phonenumbers.Leniency.VALID.
-        max_tries (int): The maximum number of tries to attempt to match a phone number.
-            Default is 65535.
+    - leniency (phonenumbers.Leniency): The leniency to use when matching phone numbers.
+        Default is phonenumbers.Leniency.VALID.
+    - max_tries (int): The maximum number of tries to attempt to match a phone number.
+        Default is 65535.
 
     Returns:
     --------
-        List[str]: A list of extracted phone numbers in E.164 format.
+    List[str]: A list of extracted phone numbers in E.164 format.
 
     Example:
     --------
-        >>> processor = Phone()
-        >>> processor('Call us at +1 650-253-0000 or +44 20-7031-3000.')
-        ['+16502530000', '+442070313000']
+    >>> processor = Phone()
+    >>> processor('Call us at +1 650-253-0000 or +44 20-7031-3000.')
+    ['+16502530000', '+442070313000']
 
     Method Signatures:
     -------------------
-    PhoneNumberMatcher.__init__(self, text, region, leniency=Leniency.VALID, max_tries=65535):
-    phonenumbers.format_number(numobj, num_format)
+    - PhoneNumberMatcher.__init__(self, text, region, leniency=Leniency.VALID, max_tries=65535):
+    - phonenumbers.format_number(numobj, num_format)
 
     References:
     -----------
@@ -1049,22 +1086,26 @@ class Socials(Processor):
 
     Default Context:
     ----------------
-        domains (List[str]): A list of social media domains to filter by. Default includes major platforms.
-        contains (Optional[str]): A string that the extracted links must contain.
-            If provided, only links containing this string will be returned.
+    - domains (List[str]): A list of social media domains to filter by. Default includes major platforms.
+    - contains (Optional[str]): A string that the extracted links must contain.
+        If provided, only links containing this string will be returned.
+
+    Additional Context:
+    -------------------
+    None
 
     Returns:
     --------
-        Dict[str, List[str]]: A dictionary where keys are the domains and values are lists of extracted links that match the specified domain and optional content filter.
+    Dict[str, List[str]]: A dictionary where keys are the domains and values are lists of extracted links that match the specified domain and optional content filter.
 
     Example:
     --------
-        >>> processor = Socials(domains=["facebook", "instagram"], contains="john")
-        >>> result = processor.process_value(response)
-        {
-            'facebook': ['https://www.facebook.com/john'],
-            'instagram': ['https://www.instagram.com/john']
-        }
+    >>> processor = Socials(domains=["facebook", "instagram"], contains="john")
+    >>> result = processor.process_value(response)
+    {
+        'facebook': ['https://www.facebook.com/john'],
+        'instagram': ['https://www.instagram.com/john']
+    }
     """
 
     domains: List[str] = [
@@ -1117,29 +1158,29 @@ class SelectJmes(Processor):
 
     Default Context:
     ----------------
-        - expression (str): The JMESPath expression that defines the part of the data structure to be extracted.
+    - expression (str): The JMESPath expression that defines the part of the data structure to be extracted.
 
     Additional Context:
     -------------------
-        None
+    None
 
     Returns:
     --------
-        Any: The value extracted from the data structure according to the JMESPath expression.
+    Any: The value extracted from the data structure according to the JMESPath expression.
 
     Example:
     --------
-        >>> processor = SelectJmes('foo')
-        >>> processor.process_value({'foo': 'bar'})  # Finds 'foo' in a value that's a dict
-        'bar'
+    >>> processor = SelectJmes('foo')
+    >>> processor.process_value({'foo': 'bar'})  # Finds 'foo' in a value that's a dict
+    'bar'
 
-        >>> processor = SelectJmes('foo[*].bar')
-        >>> processor([{'foo': {'bar': 1}}, {'foo': {'bar': 2}}])  # Finds 'bar' inside 'foo' in a list of dicts
-        [1, 2]
+    >>> processor = SelectJmes('foo[*].bar')
+    >>> processor([{'foo': {'bar': 1}}, {'foo': {'bar': 2}}])  # Finds 'bar' inside 'foo' in a list of dicts
+    [1, 2]
 
     Method Signatures:
     -------------------
-        jmespath.search(expression, data)
+    jmespath.search(expression, data)
 
     References:
     -----------
@@ -1152,3 +1193,5 @@ class SelectJmes(Processor):
         self, value: Union[Mapping[str, Any], List[Mapping[str, Any]]], **context
     ) -> Any:
         return jmespath.search(context["expression"], value)
+
+

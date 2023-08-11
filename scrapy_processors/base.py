@@ -46,24 +46,30 @@ class MetaMixin(type):
         Description:
         -----------
         Collect all non-callable, non-dunder attributes from the class definition
-        and add them to a new dictionary class attribute named 'default_context'.
+        and add them to a new dictionary class attribute named ``default_context``.
 
-        Parameters:
-        ----------
-        - name : str
-            The name of the class to be created.
-        - bases : tuple
-            A tuple containing the base classes for the new class.
-        - namespace : Dict[str, Any]
-            The namespace containing the class's attributes.
+        Example:
+        --------
 
-        Returns:
-        -------
-        - ProcessorMeta : The newly created class.
+        >>> # From this:
+        >>> class SomeClass:
+        >>>    a = 1
+        >>>    b = 2
+        >>>    __c = 3
+        >>>    def some_method(self):
+        >>>        ...
+
+        >>> # To this:
+        >>> class SomeClass:
+        >>>    default_context = {"a": 1, "b": 2}
+        >>>    __c = 3
+        >>>    def some_method(self):
+        >>>        ...
 
         Raises:
         ------
-        - Raises ValueError if the class attributes include reserved names such as 'item' or 'selector'.
+        - Raises ValueError if the class attributes include reserved names
+            such as ``item`` or ``selector``.
         """
         cls_attrs = {
             k: v
@@ -77,100 +83,117 @@ class MetaMixin(type):
             raise ValueError(MetaMixin.RESERVED_ATTRS_MSG.format("selector"))
 
         namespace["default_context"] = cls_attrs
+
+        for k in cls_attrs:
+            del namespace[k]
+
         return super().__new__(cls, name, bases, namespace)
 
 
 class ProcessorMeta(MetaMixin):
     """
-    The ProcessorMeta metaclass transforms a class definition by gathering class attributes,
-    into a dictionary named 'default_context', adding a constructor that updates the 'default_context'
+    Description:
+    -----------
+    - Collect all non-callable, non-dunder attributes from the class definition
+    and add them to a new dictionary class attribute named ``default_context``.
+    - Add a constructor that updates the ``default_context`` with the arguments passed to the constructor.
+    - Prohibts ``__init__`` from being defined, to not conflict with the constructor.
+    - Validates the signature of the ``process_value`` method & adds a decorator to the method.
+    - Validates the signature of the ``__call__`` method & adds a decorator to the method.
+    - More about the two decorators in the ``To This:`` section below.
 
-    validating method signatures, and applying decorators to methods.
-
-    From this:
+    From This:
     ---------
-    class MyProcessor(Processor):
-        arg1, arg2, arg3 = 10, 20, 30
+    >>> class MyProcessor(Processor):
+    ...    arg1, arg2, arg3 = 10, 20, 30
+    ...
+    ...    def process_value(self, value, **context):
+    ...        ...
+    ...
+    ...    def __call__(self, values, **loader_context):
+    ...        ...
 
-        def process_value(self, value, **context):
-            ...
-
-        def __call__(self, values, loader_context):
-            ...
-
-    To this:
+    To This:
     ---------
-    class MyProcessor(Processor):
-
-        default_context = {"arg1": 10, "arg2": 20, "arg3": 30}
-
-        def __init__(self, arg1, arg2, arg3, **kwargs):
-            \"""
-            This method takes *args and **kwargs.
-            *args in turned into a dict with keys being the parameter names and values being the arguments.
-            **kwargs is used to update the default_context.
-
-            The functionality is a little different than what's below, but the outcome is the same.
-            \"""
-
-            self.default_context["arg1"] = arg1
-            self.default_context["arg2"] = arg2
-            self.default_context["arg3"] = arg3
-            self.default_context.update(kwargs)
-
-        @decorator
-        def process_value(self, value, **context):
-            \"""
-            Signature Validation:
-            --------------------
-            - The first parameter after self must accept positional arguments.
-                Typically this is called "value", but it can be called anything.
-            - There must be a variable keyword parameter.
-                Typically this is called "context", but it can be called anything.
-            - Additional parameters are allowed, but they must have default values.
-
-            Decorator Functionality:
-            -----------------------
-            - Chainmap(context, self.default_context) is passed to the variable keyword parameter.
-            Instead of context by itself.
-            \"""
-            ...
-
-        @decorator
-        def __call__(self, values, loader_context=None):
-            \"""
-            Signature Validation:
-            --------------------
-            - The first parameter after self must accept positional arguments.
-                Typically this is called "values", but it can be called anything.
-            - The second parameter after self must be named "loader_context".
-                The itemloader package will not pass loader_context to any other parameter.
-            - Additional parameters are allowed, but they must have default values.
-
-            Decorator Functionality:
-            -----------------------
-            - If the argument passed to values is a single value, it is wrapped in a list.
-            - Chainmap(loader_context, self.default_context) is passed to loader_context.
-            - loader_context is given a default value of `None`.
-            \"""
-            ...
+    >>> class MyProcessor(Processor):
+    ...
+    >>>    default_context = {"arg1": 10, "arg2": 20, "arg3": 30}
+    ...
+    >>>    def __init__(self, arg1, arg2, arg3, **kwargs):
+    >>>        \"""
+    >>>        This method takes *args and **kwargs.
+    >>>        args in turned into a dict with keys being the parameter names and values being the arguments.
+    >>>        The arg_dict and kwargs are then used to update the default_context.
+    ...
+    >>>        The functionality is a little different than what's below, but the outcome is the same.
+    >>>        \"""
+    >>>        arg_dict = {"arg1": arg1, "arg2": arg2, "arg3": arg3}
+    >>>        self.default_context.update(arg_dict)
+    >>>        self.default_context.update(kwargs)
+    ...
+    >>>    @decorator
+    >>>    def process_value(self, value, **context):
+    >>>        \"""
+    >>>        Signature Validation:
+    >>>        --------------------
+    >>>        - The signature must be exactly what is above.
+    >>>        - The first parameter `value` must be positional or keyword.
+    >>>        - The second parameter `context` must be a variable length keyword parameter.
+    ...
+    >>>        Decorator Functionality:
+    >>>        -----------------------
+    >>>        - Chainmap(context, self.default_context) is passed to the context parameter.
+    >>>        \"""
+    >>>        ...
+    ...
+    >>>    @decorator
+    >>>    def __call__(self, values, **loader_context):
+    >>>        \"""
+    >>>        Signature Validation:
+    >>>        --------------------
+    >>>        - The signature must be exactly what is above.
+    >>>        - The first parameter `values` must be positional or keyword.
+    >>>        - The second parameter `loader_context` must be a variable length keyword parameter.
+    ...
+    >>>        Decorator Functionality:
+    >>>        -----------------------
+    >>>        - If the argument passed to `values` is a single value, it is wrapped in a list.
+    >>>        - Chainmap(loader_context, self.default_context) is passed to the `loader_context` parameter.
+    >>>        - Adjusts signature so `loader_context` is optional, and allows it to be passed as a keyword argument or as a variable length keyword argument.
+    >>>             This allows this extension to more easily integrate with the itemloaders package.
+    >>>        \"""
+    >>>        ...
     """
 
     @staticmethod
     def prepare_process_value(cls_name: str, func: Callable) -> Callable:
         """
-        Prepare the process_value method by applying specific validations and a decorator.
+        Description:
+        -----------
+        Validate the signature of the ``process_value`` method and add a decorator to the method.
 
         Signature Validation:
         --------------------
-        process_value(self, value, **context) is the only valid signature
+        >>> process_value(self, value, **context): ... # only valid signature
+
+        - The first parameter `value` must be positional or keyword.
+        - The second parameter `context` must be a variable length keyword parameter.
 
         Decorator Functionality:
         -----------------------
-        The decorator allows you to call the method as expected
+        - The decorator preserves the signature of the original method.
 
-        process_value(self, value, **context), but the method will receive
-        **Chainmap(context, self.default_context) instead of **context by itself.
+        >>> # the argument passed to the context parameter is combined with ``default_context``
+        >>> **Chainmap(context, self.default_context)
+
+        Raises:
+        ------
+        TypeError:
+        - If ``value`` isn't a positional or keyword parameter.
+        - If ``context`` isn't a variable length keyword parameter.
+
+        ValueError:
+        - If too few or too many parameters are defined.
         """
 
         sig = signature(func)
@@ -191,31 +214,19 @@ class ProcessorMeta(MetaMixin):
         if not MetaMixin.param_is_pos(value):
             raise TypeError(
                 msg
-                + f"The first parameter must be positional, not {str(value.kind).upper()}."
+                + f"Parameter ``value`` must be positional, not {str(value.kind).upper()}."
             )
 
         # Validate 'context' parameter
         if str(context.kind).upper() != "VAR_KEYWORD":
             raise TypeError(
                 msg
-                + "There must be a variable length keyword parameter. Typically named `context`, declared as **context."
+                + f"Parameter ``context`` must be a variable length keyword parameter, not {str(context.kind).upper()}."
             )
 
         def decorator(func):
             """
-            A decorator to modify the behavior of the process_value method:
-            passes ChainMap(context, self.default_context) to the variable keyword parameter.
-            rather than context by itself.
-
-            Parameters:
-            ----------
-            func : Callable
-                The original function to be decorated.
-
-            Returns:
-            -------
-            Callable
-                The decorated function with modified behavior.
+            Passes the ``context`` to the method as ``ChainMap(context, self.default_context)``.
             """
 
             @wraps(func)
@@ -229,43 +240,53 @@ class ProcessorMeta(MetaMixin):
     @staticmethod
     def prepare_dunder_call(cls_name: str, func: Callable) -> Callable:
         """
-        Prepare the __call__ method by applying specific validations and a decorator.
-
-        Parameters:
-        ----------
-        cls_name : str
-            The name of the class the __call__ method belongs to.
-        func : Callable
-            The original __call__ method to be prepared.
-
-        Returns:
-        -------
-        Callable
-            A decorated version of the original __call__ method, with additional logic.
+        Description:
+        -----------
+        Validate the signature of the ``__call__`` method and add a decorator to the method.
 
         Signature Validation:
         --------------------
-        __call__(self, values, **loader_context) is the only valid signature.
+        >>> __call__(self, values, **loader_context): ... # only valid signature
+
+        - The first parameter `values` must be positional or keyword.
+        - The second parameter `loader_context` must be a variable length keyword parameter.
 
         Decorator Functionality:
         -----------------------
-        The decorator allows you to call the proecssor with
+        - The decorator changes the signature of the original method to
+
+        >>> __call__(self, values, loader_context=None, **kwargs): ...
+
+        This is because the itemloader package expects the following signature:
+
+        >>> __call__(self, values, loader_context=None): ...
+
+        It uses ``functools.partial`` to pass the loader_context as a keyword argument.
+
+        Allowing either a keyword argument or a variable length keyword argument
+        allows for more intuitive calling outside the itemloaders package (testing, etc).
+
+        >>> # If a single value is passed to ``values`` is wrapped in a list.
+        >>> values = arg_to_iter(values)
+        ...
+        >>> # The arguments passed to the ``loader_context`` parameter and/or ``**kwargs`` is combined with ``default_context``
+        >>> **Chainmap(kwargs, loader_context or {}, self.default_context)
 
         >>> proc([1, 2, 3]) # No loader context
         >>> proc([1, 2, 3], {'a': 1}) # With loader context passed as a positional argument
         >>> proc([1, 2, 3], a=1) # With loader context passed as a keyword argument
-        >>> proc([1, 2, 3], **{'a': 1}) # With loader context passed as a keyword argument
+        >>> proc([1, 2, 3], **{'a': 1}) # With loader context passed as a variable length keyword argument
 
         All results will be the same.
 
-        loader_context becomes ChainMap(kwargs, loader_context or {}, self.default_context)
-
         Raises:
         ------
-        TypeError
-            If the signature of the provided callable violates the rules.
-        ValueError
-            If there are non-optional parameters other than `values` and `loader_context`.
+        TypeError:
+        - If ``values`` isn't a positional or keyword parameter.
+        - If ``loader_context`` isn't a variable length keyword parameter.
+
+        ValueError:
+        - If too few or too many parameters are defined.
         """
         sig = signature(func)
         params = list(sig.parameters.values())
@@ -284,45 +305,33 @@ class ProcessorMeta(MetaMixin):
         if not MetaMixin.param_is_pos(values):
             raise TypeError(
                 msg
-                + f"The first parameter must be positional, not {str(values.kind).upper()}."
+                + f"Parameter ``values`` must be positional, not {str(values.kind).upper()}."
             )
 
         # Validate 'loader_context' parameter
         if str(loader_context.kind).upper() != "VAR_KEYWORD":
             raise TypeError(
                 msg
-                + f"The second parameter must be a variable length keyword parameter (typically named `loader_context`), not {str(loader_context.kind).upper()} with name `{loader_context.name}`."
+                + f"Parameter ``loader_context`` must be a variable length keyword parameter, not {str(loader_context.kind).upper()}."
             )
 
         def decorator(func: Callable) -> Callable:
             """
-            A decorator to modify the behavior of the __call__ method.
+            Description:
+            -----------
+            - Modifies the signature of the original method to:
 
-            This decorator performs two main jobs:
+            >>> __call__(self, values, loader_context=None, **kwargs): ...
 
-            - If a single value is passed to the `values` parameter,
-            it's placed into a list. This ensures that the subsequent code can always expect
-            an iterable, even if only one value is provided.
-
-            - Passes the `loader_context` to the method as ChainMap(loader_context, self.default_context).
-            The `loader_context` takes priority over `default_context`, allowing for dynamic
-            overrides of default values.
-
-            Parameters
-            ----------
-            func : Callable
-                The original function to be decorated.
-
-            Returns
-            -------
-            Callable
-                The decorated function with modified behavior.
+            - If the argument passed to ``values`` is a single value, it is wrapped in a list.
+            - Passes the ``loader_context`` to the method as ``ChainMap(kwargs, loader_context or {} , self.default_context)``.
             """
 
             def wrapper(self, values, loader_context=None, **kwargs):
                 """
-                Kwargs are a stand_in for loader_context allowing for both
-                `__call__(self, values, loader_context)` and `__call__(self, values, **loader_context)`.
+                ``**kwargs`` is a stand_in for ``**loader_context`` allowing for both:
+                >>> __call__(self, values, loader_context): ...
+                >>> __call__(self, values, **loader_context): ...
                 """
                 values = arg_to_iter(values)
                 loader_context = ChainMap(
@@ -337,28 +346,16 @@ class ProcessorMeta(MetaMixin):
 
     def __init__(cls, name: str, bases: tuple, namespace: dict):
         """
-        Initialize a new class with additional validations and attributes.
-
-        Parameters:
-        ----------
-        name : str
-            The name of the class.
-        bases : tuple
-            A tuple containing the base classes for the class object.
-        namespace : dict
-            The dictionary of class attributes.
+        Description:
+        ------------
+        - Prohibts ``__init__`` from being defined, to not conflict with the ``__call__`` of this metaclass.
+        - Validates the signature of the ``process_value`` method & adds a decorator to the method.
+        - Validates the signature of the ``__call__`` method & adds a decorator to the method.
 
         Raises:
         ------
         TypeError
             If the class defines an `__init__` method, as it is reserved for the ProcessorMeta metaclass.
-
-        Notes:
-        -----
-        This method performs the following operations:
-        - Validates that the class does not define its own `__init__` method.
-        - Prepares the `process_value` and `__call__` methods using the `prepare_process_value` and
-        `prepare_dunder_call` static methods respectively.
         """
 
         # Check if the class defines an __init__ method, and raise an error if it does
@@ -393,28 +390,12 @@ class ProcessorMeta(MetaMixin):
 
     def __call__(cls, *args, **kwargs) -> Any:
         """
-        Create an instance of the Processor subclass and update the default_context.
-
-        Parameters:
-        ----------
-        *args : tuple
-            Positional arguments to be passed to the constructor.
-        **kwargs : dict
-            Keyword arguments to be passed to the constructor.
-
-        Returns:
-        -------
-        Any
-            An instance of the Processor subclass.
-
-        Notes:
-        -----
-        This method performs the following operations:
-        1. Copies the default_context attribute from the class.
-        2. Dynamically creates a function signature based on the default_context, allowing for additional arguments.
-        3. Binds the arguments passed to the constructor, ensuring they match the signature.
-        4. Updates the default_context with the bound arguments.
-        5. Creates a new instance of the Processor subclass and sets its default_context attribute.
+        Description:
+        ------------
+        - Creates a deepcopy of the ``default_context`` attribute from the class.
+        - Dynamically creates a function signature using the ``default_context`` keys & any keyword passed to ``kwargs``.
+        - Binds ``args`` and ``kwargs`` to the signature, and uses the bound_arguments dict to update ``default_context``.
+        - Sets the instance's ``default_context`` attribute to the updated ``default_context``.
         """
 
         # Create a copy of the default_context to avoid modifying the class-level attribute
@@ -443,89 +424,102 @@ class ProcessorMeta(MetaMixin):
 
 class ProcessorCollectionMeta(MetaMixin):
     """
-    The ProcessorCollectionMeta metaclass transforms a class definition by gathering class attributes
-    into a dictionary named 'default_context', adding a constructor that updates the 'default_context',
-    and applying validations.
+    Description:
+    -----------
+    - Collect all non-callable, non-dunder attributes from the class definition
+    and add them to a new dictionary class attribute named ``default_context``.
+    - Validates the signature of the ``__call__`` method & adds a decorator to the method.
+        More about the decorator in the ``To This:`` section below.
 
     From this:
     ---------
-    class MyProcessorCollection(ProcessorCollection):
-        stop_on_none = False
-        default = None
-
-        def __call__(self, values, loader_context):
-            ...
+    >>> class MyProcessorCollection(ProcessorCollection):
+    >>>    stop_on_none = False
+    >>>    default = None
+    ...
+    >>>    def __call__(self, values, *wrapped_processors, **loader_context):
+    >>>        ...
 
     To This:
     ---------
-    class MyProcessorCollection(ProcessorCollection):
-        default_context = {"stop_on_none": False, "default": None}
-
-        def __init__(self, *processors, **default_context):
-            self.processors = list(processors)
-            self.default_context.update(default_context)
-
-        @decorator
-        def __call__(self, values, loader_context=None):
-            \"""
-            Signature Validation:
-            --------------------
-            - The first parameter after self must accept positional arguments.
-                Typically this is called "values", but it can be called anything.
-            - The second parameter after self must be named "loader_context".
-                The itemloader package will not pass loader_context to any other parameter.
-            - Additional parameters are allowed, but they must have default values.
-
-            Decorator Functionality:
-            -----------------------
-            - If the argument passed to values is a single value, it is wrapped in a list.
-            - Chainmap(loader_context, self.default_context) is passed to loader_context.
-            - loader_context is given a default value of `None`.
-            \"""
-            ...
+    >>> class MyProcessorCollection(ProcessorCollection):
+    >>>    default_context = {"stop_on_none": False, "default": None}
+    ...
+    >>>    @decorator
+    >>>    def __call__(self, values, *wrapped_processors, **loader_context):
+    >>>        \"""
+    >>>        Signature Validation:
+    >>>        --------------------
+    >>>        - The signature must be exactly what is above.
+    >>>        - The first parameter `values` must be a positional or keyword parameter.
+    >>>        - The second parameter `wrapped_processors` must be a variable length positional parameter.
+    >>>        - The third parameter `loader_context` must be a variable length keyword parameter.
+    ...
+    >>>        Decorator Functionality:
+    >>>        -----------------------
+    >>>        - If the argument passed to `values` is a single value, it is wrapped in a list.
+    >>>        - Chainmap(loader_context, self.default_context) is passed to the `loader_context` parameter.
+    >>>        - the Chainmap above is used to wrap all processors in `self.processors` and pass these
+    >>>             wrapped processors to the `wrapped_processors` parameter.
+    >>>        \"""
+    >>>        ...
     """
 
     @staticmethod
     def prepare_dunder_call(cls_name: str, func: Callable) -> Callable:
         """
-        Prepare the __call__ method by applying specific validations and a decorator.
-
-        Parameters:
-        ----------
-        cls_name : str
-            The name of the class the __call__ method belongs to.
-        func : Callable
-            The original __call__ method to be prepared.
-
-        Returns:
-        -------
-        Callable
-            A decorated version of the original __call__ method, with additional logic.
+        Description:
+        -----------
+        Validate the signature of the ``__call__`` method and add a decorator to the method.
 
         Signature Validation:
         --------------------
-        def __call__(self, values, *wrapped_processors, **loader_context): ... is the only valid signature.
+        >>> def __call__(self, values, *wrapped_processors, **loader_context): # Only valid signature
+
+        - The first parameter ``values`` must be positional or keyword.
+        - The second parameter ``wrapped_processors`` must be a  variable length positional parameter.
+        - The third parameter ``loader_context`` must be a variable length keyword parameter.
 
         Decorator Functionality:
         -----------------------
-        The decorator allows you to call the proecssor with
+        - The decorator changes the signature of the original method to
+
+        >>> __call__(self, values, *, loader_context=None, **kwargs): ...
+
+        This is because the itemloader package expects the following signature:
+
+        >>> __call__(self, values, loader_context=None): ...
+
+        It uses ``functools.partial`` to pass the loader_context as a keyword argument.
+
+        Allowing either a keyword argument or a variable length keyword argument
+        allows for more intuitive calling outside the itemloaders package (testing, etc).
+
+        >>> # If a single value is passed to ``values`` is wrapped in a list.
+        >>> values = arg_to_iter(values)
+        ...
+        >>> # The arguments passed to the ``loader_context`` parameter and/or ``**kwargs`` is combined with ``default_context``
+        >>> **Chainmap(kwargs, loader_context or {}, self.default_context)
+
+        The Chaimap above is then used to wrap the processors in ``self.processors``
+        and pass those to the ``*wrapped_processors`` parameter.
 
         >>> proc([1, 2, 3]) # No loader context
         >>> proc([1, 2, 3], {'a': 1}) # With loader context passed as a positional argument
         >>> proc([1, 2, 3], a=1) # With loader context passed as a keyword argument
-        >>> proc([1, 2, 3], **{'a': 1}) # With loader context passed as a keyword argument
+        >>> proc([1, 2, 3], **{'a': 1}) # With loader context passed as a variable length keyword argument
 
         All results will be the same.
 
-        loader_context becomes ChainMap(kwargs, loader_context or {}, self.default_context)
-        wrapped_processors are the instanes processors with the loader_context applied.
-
         Raises:
         ------
-        TypeError
-            If the signature of the provided callable violates the rules.
-        ValueError
-            If there are non-optional parameters other than `values`, `wrapped_proccessors` or `loader_context`.
+        TypeError:
+        - If ``values`` isn't a positional or keyword parameter.
+        - If ``wrapped_processors`` isn't a variable length positional parameter.
+        - If ``loader_context`` isn't a variable length keyword parameter.
+
+        ValueError:
+        - If too few or too many parameters are defined.
         """
         sig = signature(func)
         params = list(sig.parameters.values())
@@ -540,62 +534,53 @@ class ProcessorCollectionMeta(MetaMixin):
 
         self, values, wrapped_processors, loader_context = params
 
-        # Validate `values`` parameter
+        # Validate 'values' parameter
         if not MetaMixin.param_is_pos(values):
             raise TypeError(
                 msg
-                + f"The first parameter must be positional, not {str(values.kind).upper()}."
+                + f"Parameter ``values`` must be positional, not {str(values.kind).upper()}."
             )
 
         # Validate `wrapped_processors` parameter
         if str(wrapped_processors.kind).upper() != "VAR_POSITIONAL":
             raise TypeError(
                 msg
-                + f"The second parameter must be a variable length positional parameter (typically named `wrapped_processors`), not {str(wrapped_processors.kind).upper()}."
+                + f"Parameter ``wrapped_processors`` must be a variable length positional parameter, not {str(wrapped_processors.kind).upper()}."
             )
 
-        # Validate `loader_context` parameter
+        # Validate 'loader_context' parameter
         if str(loader_context.kind).upper() != "VAR_KEYWORD":
             raise TypeError(
                 msg
-                + f"The third parameter must be a variable length keyword parameter (typically named `loader_context`), not {str(wrapped_processors.kind).upper()}."
+                + f"Parameter ``loader_context`` must be a variable length keyword parameter, not {str(loader_context.kind).upper()}."
             )
 
         def decorator(func: Callable) -> Callable:
             """
-            A decorator to modify the behavior of the __call__ method.
+            Description:
+            -----------
+            - Modifies the signature of the original method to:
 
-            This decorator performs two main jobs:
+            >>> __call__(self, values, *, loader_context=None, **kwargs): ...
 
-            - If a single value is passed to the `values` parameter,
-            it's placed into a list. This ensures that the subsequent code can always expect
-            an iterable, even if only one value is provided.
-
-            - Passes the `loader_context` to the method as ChainMap(loader_context, self.default_context).
-            The `loader_context` takes priority over `default_context`, allowing for dynamic
-            overrides of default values.
-
-            Parameters
-            ----------
-            func : Callable
-                The original function to be decorated.
-
-            Returns
-            -------
-            Callable
-                The decorated function with modified behavior.
+            - If the argument passed to ``values`` is a single value, it is wrapped in a list.
+            - Passes the ``loader_context`` to the method as ``ChainMap(kwargs, loader_context or {} , self.default_context)``.
+            - Uses the above ChainMap to wrap all processors in ``self.processors`` and pass these
+                wrapped processors to the ``wrapped_processors`` parameter.
             """
 
             def wrapper(self, values, *, loader_context=None, **kwargs):
                 """
-                Kwargs are a stand_in for loader_context allowing for both
-                `__call__(self, values, loader_context)` and `__call__(self, values, **loader_context)`.
+                ``**kwargs`` is a stand_in for ``**loader_context`` allowing for both:
+                >>> __call__(self, values, loader_context): ...
+                >>> __call__(self, values, **loader_context): ...
                 """
 
                 values = arg_to_iter(values)
                 loader_context = ChainMap(
                     kwargs, loader_context or {}, self.default_context
                 )
+
                 wrapped_processors = [
                     wrap_loader_context(p, loader_context) for p in self.processors
                 ]
@@ -613,39 +598,8 @@ class ProcessorCollectionMeta(MetaMixin):
 
     def __init__(cls, name: str, bases: tuple, namespace: dict):
         """
-        Initialize a new class with additional validations and attributes for ProcessorCollectionMeta.
-
-        Parameters:
-        ----------
-        name : str
-            The name of the class.
-        bases : tuple
-            A tuple containing the base classes for the class object.
-        namespace : dict
-            The dictionary of class attributes.
-
-        Raises:
-        ------
-        TypeError
-            If the class defines an `__init__` method, as it is reserved for the ProcessorCollectionMeta metaclass.
-
-        Notes:
-        -----
-        This method performs the following operations:
-        - Validates that the class does not define its own `__init__` method.
-        - Prepares the `__call__` method using the `prepare_dunder_call` static method from ProcessorMeta.
-        - The variable length positional arguments passed to the constructor become the instance's processors.
-        - The variable length keyword arguments are used to update the instance's default_context attribute.
+        Validates the signature of the ``__call__`` method & adds a decorator to the method.
         """
-
-        if "__init__" in namespace:
-            raise TypeError(
-                f"{cls.__name__} class should not define __init__. "
-                "The __init__ method is reserved for the ProcessorCollectionMeta metaclass. "
-                "The variable length positional arguments passed to the constructor "
-                "become the instance's processors. The variable length keyword arguments "
-                "are used to update the instance's default_context attr."
-            )
 
         if "__call__" in namespace:
             setattr(
@@ -658,54 +612,13 @@ class ProcessorCollectionMeta(MetaMixin):
 
         super().__init__(name, bases, namespace)
 
-    def __call__(cls, *args, **kwargs) -> Any:
-        """
-        Create an instance of the ProcessorCollection subclass and update the default_context.
-
-        Parameters:
-        ----------
-        *args : tuple
-            Variable length positional arguments passed to the constructor, representing the processors.
-        **kwargs : dict
-            Variable length keyword arguments passed to the constructor, used to update the instance's default_context attribute.
-
-        Returns:
-        -------
-        Any
-            An instance of the ProcessorCollection subclass.
-
-        Notes:
-        -----
-        This method performs the following operations:
-        1. Converts the variable length positional arguments into a list of processors.
-        2. Copies the default_context attribute from the class.
-        3. Updates the default_context with the keyword arguments.
-        4. Creates a new instance of the ProcessorCollection subclass, sets its processors and default_context attributes.
-        """
-        processors = list(args)
-
-        # Create a copy of the default_context to avoid modifying the class-level attribute
-        default_context = deepcopy(cls.default_context)
-        default_context.update(kwargs)
-
-        # Create a new instance and set its processors and default_context attributes
-        instance = super().__call__()
-        instance.processors = processors
-        instance.default_context = default_context
-
-        return instance
-
 
 class ContextMixin:
     default_context: ContextType
 
     @property
     def cls_name(self):
-        """
-        The name of the processor subclass.
-
-        :return: The name of the processor subclass.
-        """
+        """The name of the processor subclass."""
         return self.__class__.__name__
 
     def unpack_context(
@@ -714,44 +627,68 @@ class ContextMixin:
         **context,
     ) -> Tuple[Any, ...]:
         """
-        If loader_context can be seen as a master kwargs if the processor
-        is in a ProcessorCollection.
+        Unpacks the context to extract relevant keys and values.
 
-        Extract the values from context that correspond to the keys in
-        default_context and additional_keys.
+        Description:
+        ------------
+        The ``context`` parameter, analogous to ``kwargs``, contains key-value pairs
+        corresponding to parameter-argument pairs for callables within the ``process_value``
+        or ``__call__`` methods of ``Processor`` objects.
+
+        This creates two problems:
+        - There are multiple callables within the ``process_value`` or ``__call__``
+            methods. Then the  context needs to be split into multiple mappings.
+            ``call_with_context`` and ``wrap_with_context`` handle this case.
+        - The processor can be a part of a processor collection and ``context``
+            may have irrelevant key-value pairs. This method filters out the irrelevant keys.
+
+        This method takes the keys from ``self.default_context`` and ``additional_keys``
+        and extracts their values from ``ChainMap(context, self.default_context)``.
+
+        Parameters:
+        -----------
+        - additional_keys (str): Additional keys to be extracted from the context.
+        - context (dict): Context containing the key-value pairs to be extracted.
+
+        Returns:
+        --------
+        Tuple[Any, ...]: A tuple of values that correspond with the keys in ``self.default_context`` and ``additional_keys``.
+
+        Raises:
+        ------
+        KeyError: If a key in ``additional_keys`` is not in ``context``.
+
+        Example:
+        --------
+        >>> default_context = {'a': 1, 'b': 2} # Assume this is self.default_context
+        >>> unpack_context(**{'a': 1, 'b': 3, 'c': 4})
+        (1, 3)
         """
         context = ChainMap(context, self.default_context)
 
-        relevent_keys = tuple(self.default_context.keys()) + additional_keys
-        relevent_values = tuple(context[key] for key in relevent_keys)
+        relevant_keys = tuple(self.default_context.keys()) + additional_keys
+        relevant_values = tuple(context[key] for key in relevant_keys)
 
-        # If there is only one value, return it without the tuple
-        return relevent_values
-
-    def unpack_context_to_sets(
-        self, *additional_keys: str, **context
-    ) -> Tuple[Set[Any], ...]:
-        """
-        Extract the values from context that correspond to the keys in
-        default_context and additional_keys, and convert them into sets.
-
-        Returns a tuple of sets.
-        """
-        return tuple(
-            set(arg_to_iter(value))
-            for value in self.unpack_context(*additional_keys, **context)
-        )
+        return relevant_values
 
     def call_with_context(self, func: Union[Type, Callable], **context):
         """
-        default_context can be viewed as master kwargs, for the functions
-        nested in the process_value method.
+        Calls a callable or initializes a type with a context.
 
-        loader_context can be viewed as master kwargs for all the functions
-        in a processor collection.
+        Description:
+        ------------
+        When methods like ``process_value`` or ``__call__`` contain multiple callables,
+        the context must be split. This method extracts relevant key-value pairs from
+        the context and calls the given callable or initializes the given type.
 
-        This method unpacks the relevant keys from the context passed
-        and calls the function with them as kwargs.
+        Parameters:
+        -----------
+        func (Union[Type, Callable]): The callable or type to be called or initialized.
+        context (dict): Context containing key-value pairs.
+
+        Returns:
+        --------
+        The result of calling the given callable or initializing the given type.
         """
         context = ChainMap(context, self.default_context)
 
@@ -771,8 +708,21 @@ class ContextMixin:
 
     def wrap_with_context(self, func: Callable, **context) -> partial:
         """
-        Returns a partial of func, with the keys in default_context and the
-        keys passed in context as kwargs.
+        Wraps a callable with a context.
+
+        Description:
+        ------------
+        This method returns a partial of the given callable, with the relevant
+        keys in ``default_context`` and the provided ``context`` as kwargs.
+
+        Parameters:
+        -----------
+        func (Callable): The callable to be wrapped.
+        context (dict): Context containing key-value pairs.
+
+        Returns:
+        --------
+        partial: A partial of the given callable, with context applied as kwargs.
         """
         context = ChainMap(context, self.default_context)
         parameters = list(signature(func).parameters.keys())
@@ -783,61 +733,76 @@ class ContextMixin:
 
 class Processor(ContextMixin, metaclass=ProcessorMeta):
     """
-    A Processor class that uses an optional loader_context to process scraped values.
+    Description:
+    ------------
+    This class is an abstract class that provides a structure for creating data
+    cleaning or transformation functionalities on scraped values using ``context``.
 
-    The Processor class is an abstract class that provides a structure for creating data
-    cleaning or transformation functionalities.
+    Subclasses typically override the abstract ``process_value`` method to provide
+    specific data cleaning or transformation functionality.
 
-    The __call__ method can be overriden to process an iterable of values
-    using an optional loader_context.
+    The `__call__` method can also be overridden to process an iterable of values
+    using an optional ``loader_context``.
 
-    Typically the abstract `process_value` method is overridden in subclasses to provide
-    the specific data cleaning or transformation functionality.
+    Attributes:
+    -----------
+    default_context (dict): A dictionary containing the default values for the context.
+        This attribute is constructed by the metaclass from the non-callable, non-dunder class attributes
 
-    Example
+    Example:
     -------
     >>> from datetime import datetime
     >>> class DateProcessor(Processor):
     ...     format = "%Y-%m-%d"
-    ...
     ...     def process_value(self, value, **context):
-    ...         format = self.unpack_context(**context)
-    ...         return datetime.strptime(value, format).date()
-
-    >>> processor = DateProcessor() # default_context: {'format': '%Y-%m-%d'}
-    >>> print(processor("2022-01-01")) # Output: datetime.date(2022, 1, 1)
-    >>> print(processor("2022/01/01", loader_context={'format': "%Y/%m/%d"})) # Output: datetime.date(2022, 1, 1)
-
+    ...         return datetime.strptime(value, context['format']).date()
+    ...
+    >>> processor = DateProcessor()
+    >>> processor.process_value("2022-01-01"))
+    datetime.date(2022, 1, 1)
+    >>> processor("2022/01/01", **{'format': "%Y/%m/%d"}))
+    [datetime.date(2022, 1, 1)]
+    ...
     >>> class JoinProcessor(Processor):
     ...     separator = ", "
-    ...
-    ...     def __call__(self, values, loader_context=None):
-    ...         separator = self.unpack_context(loader_context)
-    ...         return separator.join([str(value) for value in values])
+    ...     def __call__(self, values, **loader_context):
+    ...         return context['separator'].join([str(value) for value in values])
 
     >>> join_processor = JoinProcessor(separator=',') # default_context: {'separator': ','}
-    >>> print(join_processor(["apple", "banana", "cherry"])) # Output: "apple,banana,cherry"
+    >>> join_processor(["apple", "banana", "cherry"]))
+    "apple,banana,cherry"
     """
 
     def process_value(self, value, **context) -> Any:
         """
-        Process a single value using context.
+        Process a single scraped value using ``context``.
 
-        This method is central to the functionality of the Processor class and should define
-        the specific data cleaning or transformation functionality in each subclass.
+        Description:
+        ------------
+        This method is central to the functionality of the Processor class and should be
+        overridden in each subclass to define specific data cleaning or transformation functionality.
 
         Signature Validation (Done by the metaclass):
-        --------------------
-        - The first parameter after self must accept positional arguments.
-            Typically this is called "value", but it can be called anything.
-        - There must be a variable keyword parameter.
-            Typically this is called "context", but it can be called anything.
-        - Additional parameters are allowed, but they must have default values.
+        --------------------------------------------
+        >>> process_value(self, value, **context): ... # only valid signature
+
+        - The first parameter `value` must be positional or keyword.
+        - The second parameter `context` must be a variable length keyword parameter.
 
         Decorator Functionality (Added by the metaclass):
-        -----------------------
-        - Chainmap(context, self.default_context) is passed to the variable keyword parameter.
-        Instead of context by itself.
+        -----------------------------------------------
+        - The decorator preserves the signature of the original method.
+
+        >>> # the argument passed to the context parameter is combined with ``default_context``
+        >>> **Chainmap(context, self.default_context)
+
+        Raises:
+        -------
+        NotImplementedError: If not implemented in a subclass.
+
+        Note:
+        -----
+        If a subclass overrides ``__call__`` this method may not need to be overridden.
         """
         raise NotImplementedError(
             f"{self.__class__.__name__} has not implemented the `process_value` method. "
@@ -846,24 +811,51 @@ class Processor(ContextMixin, metaclass=ProcessorMeta):
 
     def __call__(self, values, **loader_context) -> List[Any]:
         """
-        Process a collection of values using an optional loader_context.
+        Process a collection of scraped values using an optional ``loader_context``.
 
+        Description:
+        ------------
         This method uses the `process_value` method to process each value and returns a list of results.
         It's responsible for passing the context to the `process_value` method.
 
-        Signature Validation (Done by the metaclass)):
-        --------------------
-        - The first parameter after self must accept positional arguments.
-            Typically this is called "values", but it can be called anything.
-        - The second parameter after self must be named "loader_context".
-            The itemloader package will not pass loader_context to any other parameter.
-        - Additional parameters are allowed, but they must have default values.
+        Signature Validation (Done by metaclass):
+        ----------------------------------------
+        >>> __call__(self, values, **loader_context): ... # only valid signature
 
-        Decorator Functionality (Added by the metaclass):
-        -----------------------
-        - If the argument passed to values is a single value, it is wrapped in a list.
-        - Chainmap(loader_context, self.default_context) is passed to loader_context.
-        - loader_context is given a default value of `None`.
+        - The first parameter `values` must be positional or keyword.
+        - The second parameter `loader_context` must be a variable length keyword parameter.
+
+        Decorator Functionality (Added by metaclass):
+        -------------------------------------------
+        - The decorator changes the signature of the original method to
+
+        >>> __call__(self, values, loader_context=None, **kwargs): ...
+
+        This is because the itemloader package expects the following signature:
+
+        >>> __call__(self, values, loader_context=None): ...
+
+        It uses ``functools.partial`` to pass the loader_context as a keyword argument.
+
+        Allowing either a keyword argument or a variable length keyword argument
+        allows for more intuitive calling outside the itemloaders package (testing, etc).
+
+        >>> # If a single value is passed to ``values`` is wrapped in a list.
+        >>> values = arg_to_iter(values)
+        ...
+        >>> # The arguments passed to the ``loader_context`` parameter and/or ``**kwargs`` is combined with ``default_context``
+        >>> **Chainmap(kwargs, loader_context or {}, self.default_context)
+
+        >>> proc([1, 2, 3]) # No loader context
+        >>> proc([1, 2, 3], {'a': 1}) # With loader context passed as a positional argument
+        >>> proc([1, 2, 3], a=1) # With loader context passed as a keyword argument
+        >>> proc([1, 2, 3], **{'a': 1}) # With loader context passed as a variable length keyword argument
+
+        All results will be the same.
+
+        Returns:
+        --------
+        List[Any]: Processed values.
         """
         return [self.process_value(value, **loader_context) for value in values]
 
@@ -873,7 +865,6 @@ class Processor(ContextMixin, metaclass=ProcessorMeta):
         )
         return f"{self.cls_name}({default_context_str})"
 
-    # When in a processor collection class, helps with get, set, del methods
     def __eq__(self, other):
         if type(self) is type(other) and self.default_context == other.default_context:
             return True
@@ -882,65 +873,141 @@ class Processor(ContextMixin, metaclass=ProcessorMeta):
 
 class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
     """
-    An abstract class that provides a structure for creating a collection of processors.
+    Description:
+    ------------
+    This class is an abstract class that provides structure for creating a
+    collection of processors.
 
-    Subclasses can determine how the processors are called, in what order, or under what conditions.
-    The `__call__` method is overridden in a subclass to define how the collection processes values.
+    Subclasses can define how the processors are called, in what order, or under
+    what conditions by overriding the abstract `__call__` method.
 
-    Provides a list-like interface, except that mutating methods return
-    a new instance of the ProcessorCollection subclass without mutating
-    the original instance.
+    The class provides a list-like interface, such as append, extend, etc.
+    The difference is that these methods return a new instance of the class,
+    rather than mutating the existing instance.
+
+    Attributes:
+    -----------
+    - processors: List[Processor]
+        A list of processors within the collection.
+    - default_context (dict): A dictionary containing the default values for the context.
+        This attribute is constructed by the metaclass from the non-callable, non-dunder class attributes
 
     Example:
     -------
     >>> class MultiplyProcessor(Processor):
     ...     def process_value(self, value, **context):
     ...         return value * 2
-
+    ...
     >>> class AddProcessor(Processor):
     ...     def process_value(self, value, **context):
     ...         return value + 3
-
+    ...
     >>> class SubtractProcessor(Processor):
     ...     def process_value(self, value, **context):
     ...         return value - 1
-
+    ...
     >>> class SimpleProcessorCollection(ProcessorCollection):
-    ...     def __call__(self, values, loader_context=None):
-    ...         for processor in self.processors:
+    >>>     # Note that *wrapped_processors doesn't need to be passed by the user
+    >>>     # The metclass applies a decorator that uses the loader_context to wrap
+    >>>     # The instance's processors, and it passes them to this method.
+    ...     def __call__(self, values, *wrapped_processors, **loader_context):
+    ...         for processor in wrapped_processors:
     ...             values = [processor(value) for value in values]
     ...         return values
-
+    ...
+    >>> # Demonstrating "list-like" interface
     >>> collection = SimpleProcessorCollection(MultiplyProcessor(), AddProcessor())
     >>> new_collection = collection + SubtractProcessor()
-
-    >>> print(collection.processors) # Output: [MultiplyProcessor(), AddProcessor()]
-    >>> print(new_collection.processors) # Output: [MultiplyProcessor(), AddProcessor(), SubtractProcessor()]
-
-    >>> print(collection([1, 2, 3])) # Output: [5, 7, 9]
-    >>> print(new_collection([1, 2, 3])) # Output: [4, 6, 8]
+    ...
+    >>> collection.processors
+    [MultiplyProcessor(), AddProcessor()]
+    >>> new_collection.processors
+    [MultiplyProcessor(), AddProcessor(), SubtractProcessor()]
+    ...
+    >>> collection([1, 2, 3])
+    [5, 7, 9]
+    >>> new_collection([1, 2, 3])
+    [4, 6, 8]
     """
+
+    def __init__(self, *processors, **default_context):
+        """
+        It's important that the processors are stored as a list, not a tuple.
+        The __getattr__ method of this class uses the attributes of the list
+        to provide the list-like interface, allowing for operations like adding
+        and extending the processors.
+
+        Parameters:
+        -----------
+        - processors: Processor, ...
+            Zero or more Processor instances to be included in the collection.
+        - default_context: dict, optional
+            Default context that will be applied to all processors in the class.
+        """
+        self.processors = list(processors)
+
+        # We don't want the default_context being shared between instances
+        # of the class. So we make a deepcopy of the attribute, to avoid
+        # modifying the context between classes.
+        default_context_copy = deepcopy(self.__class__.default_context)
+        default_context_copy.update(default_context)
+        self.default_context = default_context_copy
 
     def __call__(self, values, *wrapped_processors, **loader_context) -> List[Any]:
         """
-        Process a collection of values using a list of processors and an optional loader_context.
+        Description:
+        ------------
+        Defines how the collection processes a collection of values using a list of processors
+        and an optional loader_context. This method should be overridden in subclasses to provide
+        specific processing logic for the collection.
 
-        This method is central to the functionality of the ProcessorCollection class and
-        defines how the collection processes scraped values.
+        Signature Validation (Done by metaclass):
+        ----------------------------------------
+        >>> def __call__(self, values, *wrapped_processors, **loader_context): # Only valid signature
 
-        Signature Validation (Done by the metaclass)):
-        --------------------
-        - The first parameter after self must accept positional arguments.
-            Typically this is called "values", but it can be called anything.
-        - The second parameter after self must be named "loader_context".
-            The itemloader package will not pass loader_context to any other parameter.
-        - Additional parameters are allowed, but they must have default values.
+        - The first parameter ``values`` must be positional or keyword.
+        - The second parameter ``wrapped_processors`` must be a  variable length positional parameter.
+        - The third parameter ``loader_context`` must be a variable length keyword parameter.
 
-        Decorator Functionality (Added by the metaclass):
-        -----------------------
-        - If the argument passed to values is a single value, it is wrapped in a list.
-        - Chainmap(loader_context, self.default_context) is passed to loader_context.
-        - loader_context is given a default value of `None`.
+        Decorator Functionality (Added by metaclass):
+        -------------------------------------------
+        - The decorator changes the signature of the original method to
+
+        >>> __call__(self, values, *, loader_context=None, **kwargs): ...
+
+        This is because the itemloader package expects the following signature:
+
+        >>> __call__(self, values, loader_context=None): ...
+
+        It uses ``functools.partial`` to pass the loader_context as a keyword argument.
+
+        Allowing either a keyword argument or a variable length keyword argument
+        allows for more intuitive calling outside the itemloaders package (testing, etc).
+
+        >>> # If a single value is passed to ``values`` is wrapped in a list.
+        >>> values = arg_to_iter(values)
+        ...
+        >>> # The arguments passed to the ``loader_context`` parameter and/or ``**kwargs`` is combined with ``default_context``
+        >>> **Chainmap(kwargs, loader_context or {}, self.default_context)
+
+        The Chaimap above is then used to wrap the processors in ``self.processors``
+        and pass those to the ``*wrapped_processors`` parameter.
+
+        >>> proc([1, 2, 3]) # No loader context
+        >>> proc([1, 2, 3], {'a': 1}) # With loader context passed as a positional argument
+        >>> proc([1, 2, 3], a=1) # With loader context passed as a keyword argument
+        >>> proc([1, 2, 3], **{'a': 1}) # With loader context passed as a variable length keyword argument
+
+        All results will be the same.
+
+        Raises:
+        -------
+        NotImplementedError: If not implemented in a subclass.
+
+        Returns:
+        --------
+        List[Any]: Processed values.
+
         """
         raise NotImplementedError(
             f"{self.__class__.__name__} has not implemented the `__call__` method. "
@@ -950,19 +1017,21 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
 
     def _merge_default_context(self, other, method="extend"):
         """
-        Merge the default_context attributes of two ProcessorCollection instances.
+        Merge the ``default_context`` attributes of two ProcessorCollection instances.
 
-        This method is used to combine the default_context attributes of two instances,
+        Description:
+        ------------
+        This method is used to combine the ``default_context`` attributes of two instances,
         ensuring that shared keys have the same values. If shared keys have different values,
         a ValueError is raised to prevent unexpected behavior in the processors.
 
         Parameters:
         ----------
-        other: ProcessorCollection
-            Another ProcessorCollection instance with which to merge default_context.
-        method: str, optional
-            A string indicating the method that triggered the merge (e.g., "extend" or "__add__").
-            Used in the exception message if there's a conflict. Default is "extend".
+        - other: ProcessorCollection
+            Another ProcessorCollection instance with which to merge ``default_context``.
+        - method: str, optional
+            A string indicating the method that triggered the merge (e.g., ``extend`` or ``__add__``).
+            Used in the exception message if there's a conflict. Default is ``extend``.
 
         Returns:
         -------
@@ -972,20 +1041,25 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
         Raises:
         ------
         ValueError
-            If the two instances have shared keys in default_context with different values,
+            If the two instances have shared keys in ``default_context`` with different values,
             indicating a conflict that could lead to unexpected behavior.
 
         Example:
         --------
-        self.default_context = {'a': 1, 'b': 2}
-        other.default_context = {'b': 2, 'c': 3}
-        merged = self._merge_default_context(other)  # Result: {'a': 1, 'b': 2, 'c': 3}
+        >>> self.default_context = {'a': 1, 'b': 2}
+        >>> other.default_context = {'b': 2, 'c': 3}
+        >>> self._merge_default_context(other)
+        {'a': 1, 'b': 2, 'c': 3}
+        ...
+        >>> other.default_context = {'a': 2}
+        >>> self._merge_default_context(other)
+        ValueError: Shared keys in default_context attrs have different values. Key: a, self: 1, other: 2
         """
         self_context = self.default_context
         other_context = other.default_context
 
-        shared_keys = tuple(set(self_context.keys()) & set(other_context.keys()))
-        self_values = tuple(self_context[key] for key in shared_keys)
+        shared_keys  = tuple(set(self_context.keys()) & set(other_context.keys()))
+        self_values  = tuple(self_context[key] for key in shared_keys)
         other_values = tuple(other_context[key] for key in shared_keys)
 
         if self_values == other_values:
@@ -1013,6 +1087,8 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
         """
         Extend the collection with new processors.
 
+        Description:
+        ------------
         Pass either an iterable of processors or another ProcessorCollection instance.
         Returns a new instance of the ProcessorCollection subclass with the new processors,
         without mutating the original instance.
@@ -1031,7 +1107,8 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
         -------
         >>> collection = ProcessorCollection(MultiplyProcessor(), AddProcessor())
         >>> new_collection = collection.extend([SubtractProcessor()])
-        >>> print(new_collection.processors) # Output: [MultiplyProcessor(), AddProcessor(), SubtractProcessor()]
+        >>> new_collection.processors
+        [MultiplyProcessor(), AddProcessor(), SubtractProcessor()]
         """
         if isinstance(processors, ProcessorCollection):
             return self.__class__(
@@ -1050,7 +1127,7 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
             return self.__class__(
                 *self.processors,
                 *processor.processors,
-                self._merge_default_context(processor, method="__add__"),
+                **self._merge_default_context(processor, method="__add__"),
             )
 
         processors = self.processors.copy() + list(arg_to_iter(processor))
@@ -1060,13 +1137,15 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
         def processor_to_str(processor):
             if isinstance(processor, (Processor, ProcessorCollection)):
                 return str(processor)
-            else:
+            if hasattr(processor, "__qualname__"):
                 # str.upper, etc
                 name = processor.__qualname__
                 if "<lambda>" in name:
                     return "lambda_processor"
                     # return name.split(".")[0]
                 return name
+            else:
+                return str(processor)
 
         processors_str = ", ".join(
             [processor_to_str(processor) for processor in self.processors]
@@ -1086,6 +1165,9 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
         delegates attribute/method calls to the internal processors list,
         and returns a new object when a list-mutating method is called
         """
+        if not hasattr(self.processors, name):
+            raise AttributeError(f"'{self}' object has no attribute '{name}'")
+
         attr = getattr(self.processors, name)
 
         if callable(attr):
@@ -1105,3 +1187,12 @@ class ProcessorCollection(ContextMixin, metaclass=ProcessorCollectionMeta):
             return wrapper
         else:
             return attr  # non-callable attribute
+
+    def replace(self, index, processor):
+        """
+        Replace the processor at the given index with the provided processor.
+        """
+        processors = self.processors.copy()
+        processors[index] = processor
+        return self.__class__(*processors, **self.default_context)
+

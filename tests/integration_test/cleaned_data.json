@@ -1,0 +1,11 @@
+[
+{"date": "2016-02-03 17:04:27"},
+{"date": "2019-12-23 02:04:18"},
+{"date": "1992-12-25 12:00:00"},
+{"number": "1000"},
+{"number": "100"},
+{"price": {"amount": "1500.50", "currency": "¥", "amount_text": "1,500.50"}},
+{"text": "This really is a messy string!!!"},
+{"json": "This is some foo content."},
+{"json": "John Doe"}
+]

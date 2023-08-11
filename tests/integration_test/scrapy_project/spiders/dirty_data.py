@@ -1,7 +1,7 @@
 
 import scrapy
 from pathlib import Path
-from scrapy_project.itemloaders import (
+from scrapy_project.item_loaders import (
     DateTimeItemLoader, NumericStringItemLoader, PriceItemLoader, TextItemLoader,
     JsonItemLoader, JsonItemLoader2
 )
@@ -15,7 +15,7 @@ class DirtyDatesSpider(scrapy.Spider):
     start_urls = [html_filepath]  # crawl the local file
 
     def parse(self, response):
-        
+
         #######################################################################
         # Dates
         #######################################################################
@@ -30,22 +30,22 @@ class DirtyDatesSpider(scrapy.Spider):
         # Different format, so specify context
         context_datetime_loader = DateTimeItemLoader(
             selector=response,
-            **{'datetime_format': '%A, %B %d, %Y %I%p'} # pass context to change the datetime format
-        ) 
+            **{'format': '%A, %B %d, %Y %I%p'} # pass context to change the datetime format
+        )
         context_datetime_loader.add_xpath('date', '//p[@id="datetime-context"]/text()') # Friday, December 25, 1992 12PM
         yield context_datetime_loader.load_item() # {'date': '1992-12-25 12:00:00'}
-        
+
         #######################################################################
         # Numeric & Price
         #######################################################################
-        numeric_loader = NumericStringItemLoader(selector=response) 
+        numeric_loader = NumericStringItemLoader(selector=response)
         numeric_loader.add_xpath('number', '//p[@id="num-1"]/text()') # 1 000,00
         yield numeric_loader.load_item()  # {'number': '1000.00'}
 
         numeric_loader = NumericStringItemLoader(
             selector=response,
             **{'decimal_places': 2}  # Default is None (no rounding)
-        ) 
+        )
         numeric_loader.add_xpath('number', '//p[@id="num-2"]/text()') # 100.00101
         yield numeric_loader.load_item()  # {'number': '100'}
 
@@ -56,7 +56,7 @@ class DirtyDatesSpider(scrapy.Spider):
         #######################################################################
         # Text
         #######################################################################
-        
+
         # html_text = (
         #     '  "" This Really    '
         #     '\n\n\n\n'
@@ -65,11 +65,11 @@ class DirtyDatesSpider(scrapy.Spider):
         text_loader = TextItemLoader(selector=response)
         text_loader.add_xpath('text', '//p[@id="dirty-string"]/text()')
         yield text_loader.load_item() # {"text": "This really is a messy string!!!"}
-        
+
         #######################################################################
         # JSON
         #######################################################################
-        
+
         # html_json = {
         #     "foo": "This is some foo content.",
         #     "bar": {

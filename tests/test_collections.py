@@ -1,10 +1,9 @@
-
 import pytest
 from scrapy_processors.collections import *
 
 
 class TestMapCompose:
-    
+
     @pytest.fixture
     def reverse_upper_processor(self, reverse_processor, upper_processor):
         return MapCompose(reverse_processor, upper_processor)
@@ -49,24 +48,24 @@ class TestMapCompose:
 
 
 class TestCompose:
-    
+
     @pytest.fixture
     def len_of_last_element_processor(
-        self, 
-        reverse_processor, 
-        get_first_processor, 
+        self,
+        reverse_processor,
+        get_first_processor,
         get_length_processor
     ):
         return Compose(
-            reverse_processor, 
-            get_first_processor, 
+            reverse_processor,
+            get_first_processor,
             get_length_processor
         )
-    
+
     @pytest.fixture
     def filter_out_world_processor(self):
         return Compose(lambda x: [_ for _ in x if _ != "world"])
-    
+
     @pytest.mark.parametrize(
         (
             "input_values, "
@@ -76,13 +75,13 @@ class TestCompose:
         [
             (
                 ["hello", "world"],
-                5, 
+                5,
                 ["hello"]
             ),
             (
                 ["apple", "banana", "cherry", "world", "zucchini"],
                 8,
-                ["apple", "banana", "cherry", "zucchini"], 
+                ["apple", "banana", "cherry", "zucchini"],
             ),
     ])
     def test(
@@ -90,7 +89,7 @@ class TestCompose:
         len_of_last_element_processor,
         filter_out_world_processor,
         input_values,
-        expected_len_of_last_element, 
+        expected_len_of_last_element,
         expected_filter_out_world
     ):
         assert len_of_last_element_processor(input_values) \
