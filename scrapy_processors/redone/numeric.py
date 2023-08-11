@@ -35,43 +35,32 @@ class NormalizeNumericString(Processor):
     """
     Processor that takes a string representing a number and formats it in a standard way.
 
+    Description:
+    ------------
     This class is useful for standardizing numeric expressions in different formats.
     For example, it can handle thousands and decimal separators in various styles
     (1 000 000,00 or 1,000,000.00 or 1.000.000,00) and convert them into a consistent format.
 
-    It can be used alongside MapCompose(NormalizeNumericString(), float) to transform
-    numerical strings into python numerical data types.
-    The default args for this class '' and '.' are choosen to be compatible
-    with python's int(string) or float(string) conversions, as commas will result in a ValueError.
-    int("1000") --> 1000
-    int("1,000") --> ValueError: invalid literal for int() with base 10: '1,000'
-
-    Note:
-        Edge case to be careful of is when a period is used to separate thousands.
-        # Hers One Hundred with two trailing zeros and three trailing zeros
-        num = Price.fromstring('100.00').amount_float # 100.0
-        num = Price.fromstring('100.000').amount_float # 100000.0
-        # These may be errors depending on the context of the data.
-        # use input_decimal_sep='.' to avoid this issue.
-
-    Args:
-        thousands_sep (str): The thousands separator to use in the output string. Default is ''.
-        decimal_sep (str): The decimal separator to use in the output string. Default is '.'.
-        decimal_places (int): The number of decimal places to maintain in the output string. Default is 2.
-        keep_trailing_zeros (bool): If False, trailing zeros after the decimal point are removed.
-        input_decimal_sep (str): The decimal separator used in the input string. Default is '.'.
-
-    Returns:
-        str: The input string formatted as a standard numerical string.
+    Default Context:
+    ----------------
+        thousands_separator (str): The thousands separator to use in the output string. Default is ''.
+        decimal_separator (str): The decimal separator to use in the output string. Default is '.'.
+        decimal_places (Optional[int]): The number of decimal places to maintain in the output string. Default is None (no rounding).
+        keep_trailing_zeros (bool): If False, trailing zeros after the decimal point are removed. Deafult is False
+        input_decimal_separator (Optional[str]): The decimal separator used in the input string.
+            Default is None, leaving PriceParser.fromstring to guess.
 
     Example:
-        processor = NormalizeNumericString(thousands_sep=',', decimal_sep='.', decimal_places=2)
-        result = processor('1 000 000,00')  # passing a single string to the instance
-        print(result)  # Output: '1,000,000.00'
+    --------
+        >>> processor = NormalizeNumericString(thousands_sep=',', decimal_sep='.', decimal_places=2)
+        >>> processor('1 000 000,00')  # passing a single string to the instance
+        '1,000,000.00'
 
-        processor = NormalizeNumericString(thousands_sep='', decimal_sep='.', decimal_places=0)
-        result = processor(['1,000,000.00', '2.50', '100.99'])  # passing an iterable to the instance
-        print(result) # Output: ['1000000', '3', '101']
+    Method Signatures:
+    -------------------
+        price_parser.Price.fromstring(cls, price, currency_hint=None, decimal_separator=None)
+
+        decimal_seperator in this signature is input_decimal_separator in context.
     """
 
     thousands_separator: str = ""
@@ -84,7 +73,7 @@ class NormalizeNumericString(Processor):
     def process_value(
         self, value: V, context: Optional[Mapping[str, Any]] = None
     ) -> str:
-        context = self.unpack_context(context)
+        context = self.unpack_context_to_sets(**context)
 
         thousands_separator, decimal_separator = context[:2]
         decimal_places, keep_trailing_zeros = context[2:4]
@@ -194,5 +183,9 @@ class ExtractEmails(Processor):
     Extracts email addresses from a string.
     """
 
-    def process_value(self, value, context=None) -> List[str]:
+    def process_value(self, value, **context) -> List[str]:
         return re.findall(r"[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+", value)
+
+
+
+

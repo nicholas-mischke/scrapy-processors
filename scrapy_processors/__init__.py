@@ -1,24 +1,45 @@
 
-# from scrapy_processors.base import (
-#     ProcessorMeta, Processor, ProcessorCollectionMeta, ProcessorCollection
-# )
+from scrapy_processors.base import Processor, ProcessorCollection
+from scrapy_processors.collections import Compose, MapCompose
 
-# from scrapy_processors.collections import MapCompose, Compose
+from scrapy_processors.single_value import (
+    # ... Strings ...
+    UnicodeEscape,
+    NormalizeWhitespace,
+    CharWhitespacePadding,
+    StripQuotes,
+    RemoveHTMLTags,
+    Demojize,
+    RemoveEmojis,
+    # ... Numeric / Numeric Strings ...
+    ExtractDigits,
+    NormalizeNumericString,
+    PriceParser,
+    ToFloat,
+    # ... Dates & Time ...
+    DateTimeExtraordinaire,
+    DateTime,
+    Date,
+    Time,
+    # ... Contact ...
+    Emails,
+    PhoneNumbers,
+    Socials,
+    # ... Misc ...
+    SelectJmes
+)
+from scrapy_processors.multi_values import (
+    TakeAll,
+    TakeAllTruthy,
+    TakeFirstTruthy,
+    Coalesce,
+    Join,
+    Flatten
+)
 
-# from scrapy_processors.date_and_time import (
-#     StringToDateTime,  StringToDateTimeExtraordinaire,
-#     StringToDate, StringToTime
-# )
-
-# from scrapy_processors.iterable import (
-#     TakeAll, TakeAllTruthy, TakeFirstTruthy, Join
-# )
-
-# from scrapy_processors.json import SelectJmes
-
-# from scrapy_processors.numeric import StringToFloat, NormalizeNumericString, PriceParser
-
-# from scrapy_processors.string import (
-#     UnicodeEscape, NormalizeWhitespace, CharWhitespacePadding,
-#     StripQuotes, RemoveHTMLTags, Demojize, RemoveEmojis
-# )
+# Clean scraped strings
+clean_string = MapCompose(
+    UnicodeEscape(),
+    RemoveHTMLTags(),
+    NormalizeWhitespace(),
+)

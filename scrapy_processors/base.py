@@ -1,17 +1,27 @@
-# Standard library imports
+# Standard Library Imports
 from collections import ChainMap
 from copy import deepcopy
-from functools import wraps
-from inspect import _empty as EMPTY
+from functools import partial, wraps
 from inspect import isclass, signature
 from inspect import Parameter, Signature
-# fmt: off
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Tuple, Type, TypeVar, Union
-# fmt: on
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
-# 3rd 🎉 imports
-from itemloaders.utils import arg_to_iter
+# Local Imports
 from itemloaders.common import wrap_loader_context
+from itemloaders.utils import arg_to_iter
+
 
 # Typing variables
 ValueType = TypeVar("ValueType")  # Single input value type
@@ -33,24 +43,23 @@ class MetaMixin(type):
         cls, name: str, bases: tuple, namespace: Dict[str, Any]
     ) -> "ProcessorMeta":
         """
-        Create a new class with additional validations and attributes.
-
-        This method gathers all class attributes that do not start with '__' and are not callable,
-        and adds them to a dictionary named 'default_context' in the namespace.
+        Description:
+        -----------
+        Collect all non-callable, non-dunder attributes from the class definition
+        and add them to a new dictionary class attribute named 'default_context'.
 
         Parameters:
         ----------
-        name : str
+        - name : str
             The name of the class to be created.
-        bases : tuple
+        - bases : tuple
             A tuple containing the base classes for the new class.
-        namespace : Dict[str, Any]
+        - namespace : Dict[str, Any]
             The namespace containing the class's attributes.
 
         Returns:
         -------
-        ProcessorMeta
-            The newly created class.
+        - ProcessorMeta : The newly created class.
 
         Raises:
         ------
@@ -703,7 +712,7 @@ class ContextMixin:
         self,
         *additional_keys: str,
         **context,
-    ) -> Union[Any, Tuple[Any, ...]]:
+    ) -> Tuple[Any, ...]:
         """
         If loader_context can be seen as a master kwargs if the processor
         is in a ProcessorCollection.
@@ -717,28 +726,21 @@ class ContextMixin:
         relevent_values = tuple(context[key] for key in relevent_keys)
 
         # If there is only one value, return it without the tuple
-        if len(relevent_values) == 1:
-            return relevent_values[0]
         return relevent_values
 
-    # Moved from now deleted utils.py. May or may not need it later.
-    # def to_sets(*args: Any) -> Tuple[Set[Any], ...]:
-    #     """
-    #     Convert iterables to sets, place non-iterables into a set.
-    #     Returns a tuple of sets
-    #     """
-    #     sets = []
-    #     for arg in args:
-    #         if arg is None:
-    #             sets.append(set())
-    #         elif isinstance(arg, (list, tuple, set)):
-    #             sets.append(set(arg))
-    #         else:
-    #             sets.append({arg})
+    def unpack_context_to_sets(
+        self, *additional_keys: str, **context
+    ) -> Tuple[Set[Any], ...]:
+        """
+        Extract the values from context that correspond to the keys in
+        default_context and additional_keys, and convert them into sets.
 
-    #     if len(sets) == 1:
-    #         return sets[0]
-    #     return tuple(sets)
+        Returns a tuple of sets.
+        """
+        return tuple(
+            set(arg_to_iter(value))
+            for value in self.unpack_context(*additional_keys, **context)
+        )
 
     def call_with_context(self, func: Union[Type, Callable], **context):
         """
@@ -761,11 +763,22 @@ class ContextMixin:
         parameters = list(signature(func).parameters.keys())
 
         if cls:
-            parameters.pop(0)
+            parameters.pop(0)  # Remove self
             return cls(
                 **{name: context[name] for name in parameters if name in context}
             )
         return func(**{name: context[name] for name in parameters if name in context})
+
+    def wrap_with_context(self, func: Callable, **context) -> partial:
+        """
+        Returns a partial of func, with the keys in default_context and the
+        keys passed in context as kwargs.
+        """
+        context = ChainMap(context, self.default_context)
+        parameters = list(signature(func).parameters.keys())
+        return partial(
+            func, **{name: context[name] for name in parameters if name in context}
+        )
 
 
 class Processor(ContextMixin, metaclass=ProcessorMeta):

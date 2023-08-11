@@ -13,8 +13,8 @@ from scrapy.utils.misc import arg_to_iter
 class Name(Processor):
     pass
 
-class Phone(Processor):
 
+class Phone(Processor):
     region: str = "US"
     lenient = Leniency.VALID
     max_extract: int = 65535
@@ -24,19 +24,14 @@ class Phone(Processor):
         Extract phone numbers from a string.
         """
         numbers = []
-        for match in self.init_with_context(PhoneNumberMatcher, value, self.region, self.lenient, self.max_extract):
+        for match in self.init_with_context(
+            PhoneNumberMatcher, value, self.region, self.lenient, self.max_extract
+        ):
             numbers.append(format_number(match.number, PhoneNumberFormat.E164))
         return numbers
 
 
-class Email(Processor):
-
-    def process_value(self, value, context):
-        ...
-
-
 class Address(Processor):
-
     def process_value(self, value, context):
         ...
 

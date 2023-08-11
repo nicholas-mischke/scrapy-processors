@@ -44,7 +44,7 @@ class StringToDateTime(Processor):
     """
     Processor that converts a string representing a date and time into a datetime object.
 
-    This class uses the strptime() method to convert a string into a datetime object 
+    This class uses the strptime() method to convert a string into a datetime object
     based on a specified format. By default, the format is set to '%Y-%m-%d, %H:%M:%S'.
 
     Args:
@@ -63,7 +63,7 @@ class StringToDateTime(Processor):
         print(result)  # Output: [datetime.datetime(2023, 5, 22, 12, 30), datetime.datetime(2023, 5, 23, 13, 45)]
     """
 
-    datetime_format: str = '%Y-%m-%d, %H:%M:%S'
+    format: str = '%Y-%m-%d, %H:%M:%S'
     input_tz: str = pytz.timezone(str(get_localzone()))
     output_tz: str = pytz.UTC
 
@@ -76,7 +76,7 @@ class StringToDateTime(Processor):
         datetime_format, input_tz, output_tz = self.unpack_context(context)
 
         # Get datetime object from string
-        datetime_obj = datetime.strptime(value, datetime_format)
+        datetime_obj = datetime.strptime(value, format)
 
         # Convert to input timezone
         datetime_obj = input_tz.localize(datetime_obj)
@@ -89,7 +89,7 @@ class StringToDate(Processor):
     """
     Processor that converts a string representing a date into a date object.
 
-    This class uses the strptime() method to convert a string into a datetime object 
+    This class uses the strptime() method to convert a string into a datetime object
     and then extracts the date component based on a specified format. By default, the format is set to '%Y-%m-%d'.
 
     Args:
@@ -108,22 +108,22 @@ class StringToDate(Processor):
         print(result)  # Output: [datetime.date(2023, 5, 22), datetime.date(2023, 5, 23)]
     """
 
-    date_format: str = '%Y-%m-%d'
+    format: str = '%Y-%m-%d'
 
     def process_value(
         self,
         value: V,
         context: Optional[Mapping[str, Any]] = None
     ) -> date:
-        return datetime.strptime(value, context['date_format']).date()
+        return datetime.strptime(value, context['format']).date()
 
 
 class StringToTime(Processor):
     """
     Processor that takes a string representing a time and returns a datetime.time object.
 
-    This class is useful for converting time represented as a string into a python time object 
-    that can be used for time-based computations or comparisons. The time string format 
+    This class is useful for converting time represented as a string into a python time object
+    that can be used for time-based computations or comparisons. The time string format
     can be customized.
 
     Args:
@@ -142,7 +142,7 @@ class StringToTime(Processor):
         print(result)  # Output: [datetime.time(14, 35), datetime.time(18, 40)]
     """
 
-    time_format: str = '%H:%M:%S'
+    format: str = '%H:%M:%S'
 
     def process_value(
         self,
@@ -150,4 +150,4 @@ class StringToTime(Processor):
         context: Optional[Mapping[str, Any]] = None
     ) -> time:
         # Get time object from string
-        return datetime.strptime(value, context['time_format']).time()
+        return datetime.strptime(value, context['format']).time()
