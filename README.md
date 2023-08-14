@@ -10,60 +10,147 @@ the [itemloaders](https://pypi.org/project/itemloaders/) package, commonly used 
 
 These processors are meant to extend / replace the provided processors in the [itemloaders](https://pypi.org/project/itemloaders/) package.
 
-## Table of Contents
-pass
+Additionally the provided Processor and ProcessorCollection classes can be extended to create custom processors.
 
-## Repositories
-[PyPI](https://pypi.org/project/scrapy-processors/)
-
-[GitHub](https://github.com/nicholas-mischke/scrapy-processors)
 
 ## Installation
 
 To install Scrapy Processors, simply use pip:
 
-```
+```bash
 $ pip install scrapy-processors
 ```
 
 ## What's a processor?
 
-In the context of the itemloaders package a processor is a callable that takes
-a single value and returns a transformed value.
+In the Scrapy Processors package a processor is defined as a callable that takes
+a scraped value and performs some kind of transformation on it (The T in ETL).
 
-```
+Valid callable signatures for a processor are as followes:
+>>> def processor(value): ...
+>>> def process(value, loader_context=None): ...
+>>> def process(value, **loader_context): ...
 
 
-In the context of the itemloaders package a processor is a callable that takes
-a value or an iterable of values and returns a transformed value or an iterable
-of transformed values.
 
-```
-#python
+Examples of processors that convert a string to uppercase:
 
-str.upper           # Built-in processor
-lambda x: x.upper() # Lambda processor
+```python
+# Built-in processor
+str.upper
 
+# Lambda processor
+lambda x: x.upper()
+
+# Function processor
 def upper(value):
     return value.upper()
 
+# Class processor
 class Upper:
     def __call__(self, value):
         return value.upper()
 
+```
 
 
+
+To understand the potential shortcomings of the above processors, let's define what
+`context` is within this package and the itemloaders package.
+
+In a general sense `context` can be thought of as analgous to `kwargs`.
+The key differnce being that `context` is `kwargs` for multiple callables.
+
+Here's an example of how `context` is used in the itemloaders package:
+
+Let's suppose we're scraping the below HTML file with our spider
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dates with Context</title>
+</head>
+<body>
+    <div id="div-dates">
+        <!-- ISO 8601 Format -->
+        <!-- '%Y-%m-%d, %H:%M:%S' -->
+        <p id="iso-8601-datetime-1">1992-12-25, 12:00:00</p>
+        <!-- Day Month Year Hour Minute Second Timezone -->
+        <!-- '%A, %B %d, %Y %p' -->
+        <p id="datetime-context">Friday, December 25, 1992 12PM</p>
+    </div>
+</body>
+</html>
+```
+
+```python
+#python
+from scrapy import Spider
+from itemloaders import ItemLoader
+from scrapy_processors import Processor, TakeFirstTruthy
+
+# Turn a string into a datetime object
+class DateTimeProcessor(Processor):
+    format = '%Y-%m-%d %H:%M:%S'
+
+    def process_value(self, value, **context):
+        return datetime.strptime(value, context['format'])
+
+class DateLoader(ItemLoader):
+    default_item_class = dict
+
+    date_in = DateTimeProcessor()
+    date_out = TakeFirstTruthy()
+
+class DateSpider(Spider):
+
+    # ... rest of code ...
+
+    def parse(self, response):
+
+        loader = DateLoader(selector=response)
+        loader.add_xpath('date', '//p[@id="iso-8601-datetime-1"]/text()')
+        yield loader.load_item()
+
+        # Pass the context to the ItemLoader
+        # The ItemLoader will call the processor with the `loader_context`
+        loader = DateLoader(selector=response, **{'format': '%A, %B %d, %Y %I%p'})
+        loader.add_xpath('date', '//p[@id="datetime-context"]/text()')
+        yield loader.load_item()
+
+    # ... rest of code ...
+```
+
+Here's it's important to understand the Processor class. The processor
+uses a metaclass to take the 'format' in the DateTimeProcessor and add it into
+a dictionary called `default_context`. When the class is called via the ItemLoader
+the `default_context` is merged with the `loader_context` and passed to the
+`process_value` method. Using a metaclass means you don't need to pass all keys to
+loader_context and you don't need to manually setup the ChainMap(loader_context, default_context)
+in all subclasses. It's instead done for you, automatically.
+
+
+
+
+```python
+
+class Processor(ContextMixin, metaclass=ProcessorMeta):
+    def process_value(self, value, **context) -> Any:
+        ...
+
+    def __call__(self, values, **loader_context) -> List[Any]:
+        return [self.process_value(value, **loader_context) for value in values]
 
 ```
 
-```
-```
+## Extending the Processor class
+
 
 ## Usage
 
 Here is an overview of the processors available in the package:
 
-- `MapCompose`: A processor that allows you to specify a list of callables that will be applied sequentially to a value, or to each value in a list of values.
+`MapCompose`: A processor that allows you to specify a list of callables that will be applied sequentially to a value, or to each value in a list of values.
     It supports functions (regular functions, lambda or methods), objects with a `__call__` method or classes that once initialized return an object with a `__call__` method.
     This class inherits from itemloaders.processors.MapCompose and overrides its constructor and defines `__add__`.
 - `Processor`: A base class for creating custom processors. Subclasses of `Processor` should implement the `process_value` method.

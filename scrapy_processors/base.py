@@ -95,12 +95,12 @@ class ProcessorMeta(MetaMixin):
     Description:
     -----------
     - Collect all non-callable, non-dunder attributes from the class definition
-    and add them to a new dictionary class attribute named ``default_context``.
-    - Add a constructor that updates the ``default_context`` with the arguments passed to the constructor.
-    - Prohibts ``__init__`` from being defined, to not conflict with the constructor.
-    - Validates the signature of the ``process_value`` method & adds a decorator to the method.
-    - Validates the signature of the ``__call__`` method & adds a decorator to the method.
-    - More about the two decorators in the ``To This:`` section below.
+    and add them to a new dictionary class attribute named `default_context`.
+    - Add a constructor that updates the `default_context` with the arguments passed to the constructor.
+    - Prohibts `__init__` from being defined, to not conflict with the constructor.
+    - Validates the signature of the `process_value` method & adds a decorator to the method.
+    - Validates the signature of the `__call__` method & adds a decorator to the method.
+    - More about the two decorators in the `To This:` section below.
 
     From This:
     ---------

@@ -41,19 +41,19 @@ def regex_chars(chars: Union[str, Iterable[str]], escape: bool = True) -> str:
 
     Parameters:
     -----------
-        - chars (Union[str, Iterable[str]]): A string or iterable of strings.
-        - escape (bool): Whether to escape the characters. Default is True.
+    - chars (Union[str, Iterable[str]]): A string or iterable of strings.
+    - escape (bool): Whether to escape the characters. Default is True.
 
     Returns:
     --------
-        str: A regex character class.
+    str: A regex character class.
 
     Example:
     --------
-        >>> regex_chars(['a', 'b', 'c'])
-        '[abc]'
-        >>> regex_chars('abc', escape=False)
-        '[abc]'
+    >>> regex_chars(['a', 'b', 'c'])
+    '[abc]'
+    >>> regex_chars('abc', escape=False)
+    '[abc]'
     """
     chars = arg_to_iter(chars)
     chars = [re.escape(c) if escape else c for c in chars]
