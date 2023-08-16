@@ -610,8 +610,21 @@ class ContextMixin:
 
         return relevant_values
 
+    def _extract_kwargs(self, func: Union[Type, Callable], **context) -> dict:
+        """Helper for ``call_with_context`` and ``wrap_with_context``."""
+
+        if isclass(func):
+            func = func.__init__
+
+        params = ParamProbe(func).names
+
+        if isclass(func):
+            params = params[1:]  # Remove 'self'
+
+        return {name: context[name] for name in params if name in context}
+
     @chainmap_context
-    def call_with_context(self, func: Union[Type, Callable], **context):
+    def call_with_context(self, func: Union[Type, Callable], **context) -> Any:
         """
         Calls a callable or initializes a type with a context.
 
@@ -630,22 +643,10 @@ class ContextMixin:
         --------
         The result of calling the given callable or initializing the given type.
         """
-        cls = None
-        if isclass(func):
-            cls = func
-            func = cls.__init__
-
-        parameters = list(signature(func).parameters.keys())
-
-        if cls:
-            parameters.pop(0)  # Remove self
-            return cls(
-                **{name: context[name] for name in parameters if name in context}
-            )
-        return func(**{name: context[name] for name in parameters if name in context})
+        return func(**self._extract_kwargs(func, **context))
 
     @chainmap_context
-    def wrap_with_context(self, func: Callable, **context) -> partial:
+    def wrap_with_context(self, func: Union[Type, Callable], **context) -> partial:
         """
         Wraps a callable with a context.
 
@@ -663,10 +664,7 @@ class ContextMixin:
         --------
         partial: A partial of the given callable, with context applied as kwargs.
         """
-        params = ParamProbe(func).names
-        return partial(
-            func, **{name: context[name] for name in params if name in context}
-        )
+        return partial(func, **self._extract_kwargs(func, **context))
 
 
 class Processor(ContextMixin, metaclass=ProcessorMeta):

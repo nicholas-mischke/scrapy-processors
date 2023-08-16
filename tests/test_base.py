@@ -237,6 +237,20 @@ class TestContextMixin:
         wrapped_func = processor.wrap_with_context(func)
         assert wrapped_func("value") == ("value", 1, 2, 3)
 
+        class SomeClass:
+            def __init__(self, value, a, b, c):
+                self.value = value
+                self.a = a
+                self.b = b
+                self.c = c
+
+        wrapped_cls = processor.wrap_with_context(SomeClass, **{"a": 100, "b": 200, "c": 300})
+        obj = wrapped_cls('some value')
+        assert obj.value == 'some value'
+        assert obj.a == 100
+        assert obj.b == 200
+        assert obj.c == 300
+
 
 class TestProcessor:
     def test_process_value_NotImplementedError(self):
@@ -406,4 +420,4 @@ class TestProcessorCollection:
 
 
 if __name__ == "__main__":
-    pytest.main(["pytest", "-k", "test_validate_method_signature"])
+    pytest.main(["pytest", "-k", "test_wrap_with_context"])
