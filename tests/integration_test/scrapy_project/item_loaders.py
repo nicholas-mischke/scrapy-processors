@@ -11,7 +11,7 @@ from scrapy_processors import (
 
 
 class DateTimeItemLoader(ItemLoader):
-    default_input_processor = DateTime(input_tz=pytz.UTC)
+    default_input_processor = DateTime(input_tz=pytz.utc)
     default_output_processor = TakeFirstTruthy()
 
 
@@ -59,7 +59,3 @@ class JsonItemLoader2(ItemLoader):
     ) + clean_text + str.title
 
     default_output_processor = TakeFirstTruthy()
-
-if __name__ == '__main__':
-    from pprint import pprint
-    print(JsonItemLoader2().default_input_processor)

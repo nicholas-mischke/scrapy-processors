@@ -440,7 +440,7 @@ class RemoveHTMLTags(Processor):
     ['Foo', 'Bar', 'Baz']
     """
 
-    def process_value(self, value: str, **context) -> str:
+    def process_value(self, value: str) -> str:
         return BeautifulSoup(value, "html.parser").get_text()
 
 
@@ -1193,5 +1193,3 @@ class SelectJmes(Processor):
         self, value: Union[Mapping[str, Any], List[Mapping[str, Any]]], **context
     ) -> Any:
         return jmespath.search(context["expression"], value)
-
-

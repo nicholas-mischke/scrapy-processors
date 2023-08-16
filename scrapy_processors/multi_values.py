@@ -74,11 +74,9 @@ class TakeAll:
     ----
     This processor does not inherit from scrapy_processors.base.Processor.
     This is because values is wrapped in a list if it's a single value.
-
-    This is also why it's __call__ signature is a little different.
     """
 
-    def __call__(self, values: List[Any]) -> List[Any]:
+    def __call__(self, values: Any) -> Any:
         return values
 
 
@@ -279,5 +277,5 @@ class Flatten(Processor):
     [1, 2, 3, 4, 5, 6]
     """
 
-    def __call__(self, values, **loader_context) -> List[Any]:
+    def __call__(self, values) -> List[Any]:
         return flatten(values)

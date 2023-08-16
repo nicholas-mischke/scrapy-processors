@@ -1,15 +1,8 @@
 import pytest
+
+from scrapy_processors.base import InValidSignatureException
+from scrapy_processors.base import wrap_context, chainmap_context
 from scrapy_processors.base import Processor, ProcessorCollection
-
-import re
-
-
-def single_space(text):
-    """
-    When testing Exception msg it's easy to add an extra space here or there
-    on linebreaks, this function removes all extra whitespace.
-    """
-    return re.sub(r"\s+", " ", str(text)).strip()
 
 
 @pytest.fixture
@@ -44,8 +37,8 @@ def processor_collection_cls():
 
         a, b, c = 1, 2, 3
 
-        def __call__(self, values, *wrapped_processors, **loader_context):
-            return values, wrapped_processors, loader_context
+        def __call__(self, values, **loader_context):
+            return values, self.wrapped_processors, loader_context
 
     return SomeProcessorCollection
 
@@ -60,9 +53,48 @@ def reverse_processor_collection(reverse_processor):
     return ProcessorCollection(reverse_processor)
 
 
+def test_wrap_context():
+    assert wrap_context(lambda value: value)(1) == 1
+
+    def context(value, context):
+        return value, context
+
+    assert wrap_context(context, **{"a": 1})(1) == (1, {"a": 1})
+
+    def context(value, **context):
+        return value, context
+
+    assert wrap_context(context, **{"a": 1})(1) == (1, {"a": 1})
+
+    def loader_context(value, loader_context):
+        return value, loader_context
+
+    assert wrap_context(loader_context, **{"a": 1})(1) == (1, {"a": 1})
+
+    def loader_context(value, **loader_context):
+        return value, loader_context
+
+    assert wrap_context(loader_context, **{"a": 1})(1) == (1, {"a": 1})
+
+
+def test_chainmap_context():
+    class SomeClass:
+        def __init__(self):
+            self.default_context = {"a": 1, "b": 2, "c": 3}
+
+        @chainmap_context
+        def some_method(self, value, **context):
+            return context
+
+    some_obj = SomeClass()
+    assert some_obj.some_method(1, **{"a": 10}) == {"a": 10, "b": 2, "c": 3}
+
+
 class TestProcessorMeta:
+    # Tests MetaMixin __new__, so no need to repeat these tests for ProcessorCollectionMeta
     def test__new__(self, processor):
         assert processor.default_context == {"a": 1, "b": 2, "c": 3}
+        assert not hasattr(processor, "a")
 
     def test__new__raises(self):
         with pytest.raises(ValueError) as e:
@@ -70,47 +102,23 @@ class TestProcessorMeta:
             class SomeProcessor(Processor):
                 item = "item"
 
-        with pytest.raises(ValueError) as e:
-            # selector is reserved attr for ItemLoader context attr
-            class SomeProcessor(Processor):
-                selector = "selector"
+    def test_validate_method_signature(self):
+        with pytest.raises(InValidSignatureException) as e:
 
-    def test_prepare_process_value_raises(self):
-        with pytest.raises(ValueError) as e:
-            # Too many params
-            class SomeProcessor(Processor):
+            class TooManyParams(Processor):
                 def process_value(self, value, extra_arg, **context):
                     pass
 
-        with pytest.raises(TypeError) as e:
-            # value not positional
-            class SomeProcessor(Processor):
+        with pytest.raises(InValidSignatureException) as e:
+
+            class NotPositional(Processor):
                 def process_value(self, *, value, **context):
                     pass
 
-        with pytest.raises(TypeError) as e:
-            # context not variable keyword
-            class SomeProcessor(Processor):
+        with pytest.raises(InValidSignatureException) as e:
+
+            class NotVariableLength(Processor):
                 def process_value(self, value, context):
-                    pass
-
-    def test_prepare_dunder_call_raises(self):
-        with pytest.raises(ValueError) as e:
-            # Too many parameters
-            class SomeProcess(Processor):
-                def __call__(self, values, extra_arg, **loader_context):
-                    pass
-
-        with pytest.raises(TypeError) as e:
-            # values not positional
-            class SomeProcessor(Processor):
-                def __call__(self, *, values, loader_context):
-                    pass
-
-        with pytest.raises(TypeError) as e:
-            # loader_context not keyword
-            class SomeProcessor(Processor):
-                def __call__(self, values, context):
                     pass
 
     def test__init__(self, processor):
@@ -161,7 +169,6 @@ class TestProcessorCollectionMeta:
         assert wrapped_processors == tuple()
         assert dict(loader_context) == {"a": 10, "b": 2, "c": 3}
 
-    @pytest.mark.skip("Currently subclasses can have __init__ defined.")
     def test__init__raises(self):
         with pytest.raises(TypeError) as e:
             # Cannot define __init__ in subclasses.
@@ -169,28 +176,22 @@ class TestProcessorCollectionMeta:
                 def __init__(self):
                     ...
 
-    def test_prepare_dunder_call_raises(self):
-        with pytest.raises(ValueError) as e:
-            # Too many parameters
-            class SomeProcessorCollection(ProcessorCollection):
-                def __call__(
-                    self, values, extra_arg, *wrapped_processors, **loader_context
-                ):
-                    pass
+    def test__call__(self, processor_collection_cls):
+        upper_processor = str.upper
 
-        # values will have to be positional, since we have *wrapped_processors
+        def reverse(value):
+            return value[::-1]
 
-        with pytest.raises(TypeError) as e:
-            # wrapped_processors not variable positional
-            class SomeProcessorCollection(ProcessorCollection):
-                def __call__(self, values, *, wrapped_processors, loader_context):
-                    pass
-
-        with pytest.raises(TypeError) as e:
-            # loader_context not variable keyword
-            class SomeProcessorCollection(ProcessorCollection):
-                def __call__(self, values, *wrapped_processors, loader_context):
-                    pass
+        processor = processor_collection_cls(
+            upper_processor, reverse, a=10, c=30, z="Not in default_context keys"
+        )
+        assert processor.processors == [upper_processor, reverse]
+        assert processor.default_context == {
+            "a": 10,
+            "b": 2,
+            "c": 30,
+            "z": "Not in default_context keys",
+        }
 
 
 class TestContextMixin:
@@ -270,23 +271,6 @@ class TestProcessor:
 
 
 class TestProcessorCollection:
-    def test__init__(self, processor_collection_cls):
-        upper_processor = str.upper
-
-        def reverse(value):
-            return value[::-1]
-
-        processor = processor_collection_cls(
-            upper_processor, reverse, a=10, c=30, z="Not in default_context keys"
-        )
-        assert processor.processors == [upper_processor, reverse]
-        assert processor.default_context == {
-            "a": 10,
-            "b": 2,
-            "c": 30,
-            "z": "Not in default_context keys",
-        }
-
     def test__call__NotImplementedError(self):
         with pytest.raises(NotImplementedError):
             ProcessorCollection(str.lower).__call__(1)
@@ -370,7 +354,19 @@ class TestProcessorCollection:
             strip_processor,
         ]
 
-        # Adding a ProcessorCollection to a ProcessorCollection is the same as extend
+        # Adding a ProcessorCollection to a ProcessorCollection
+        processor_II = processor_collection_cls(upper_processor, strip_processor)
+        result = processor + processor_II
+        assert isinstance(result, processor_collection_cls)
+        assert processor.processors == [
+            lower_processor,
+            strip_processor,
+        ]
+        assert result.processors == [
+            lower_processor,
+            strip_processor,
+            processor_II
+        ]
 
     def test__str__(self, reverse_processor_collection, processor):
         assert (
@@ -407,3 +403,7 @@ class TestProcessorCollection:
         new_processor = processor.clear()
         assert len(processor.processors) == 2
         assert len(new_processor.processors) == 0
+
+
+if __name__ == "__main__":
+    pytest.main(["pytest", "-k", "test_validate_method_signature"])

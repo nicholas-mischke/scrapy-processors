@@ -60,10 +60,10 @@ class Compose(ProcessorCollection):
     stop_on_none: bool = True
     default: Any = None
 
-    def __call__(self, values, *wrapped_processors, **loader_context) -> Any:
+    def __call__(self, values, **loader_context) -> Any:
         stop_on_none, default = self.unpack_context(**loader_context)
 
-        for processor in wrapped_processors:
+        for processor in self.wrapped_processors:
             if values is None and stop_on_none:
                 return default
             try:
@@ -129,8 +129,8 @@ class MapCompose(ProcessorCollection):
         ['world', 'hello']
     """
 
-    def __call__(self, values, *wrapped_processors, **loader_context) -> List[Any]:
-        for processor in wrapped_processors:
+    def __call__(self, values, **loader_context) -> List[Any]:
+        for processor in self.wrapped_processors:
             processed_values = []
             for value in values:
                 try:
