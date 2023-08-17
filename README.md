@@ -22,6 +22,49 @@ $ pip install scrapy-processors
 ```
 
 ## Built-in Processors
+- [CharWhitespacePadding](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#charwhitespacepadding)
+- [Coalesce](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-dunder-call.md#coalesce)
+- [Date](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#date)
+- [DateTime](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#datetime)
+- [DateTimeExtrordinaire](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#datetimeextraordinaire)
+- [Demojize](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#demojize)
+- [Emails](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#emails)
+- [ExtractDigits](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#extractdigits)
+- [Flatten](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-dunder-call.md#flatten)
+- [Join](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-dunder-call.md#join)
+- [NormalizeNumericString](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#normalizenumericstring)
+- [NormalizeWhitespace](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#normalizewhitespace)
+- [PhoneNumbers](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#phonenumbers)
+- [PriceParser](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#priceparser)
+- [RemoveEmojis](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#removeemojis)
+- [RemoveHTMLTags](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#removehtmltags)
+- [SelectJmes](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#selectjmes)
+- [Socials](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#socials)
+- [StripQuotes](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#stripquotes)
+- [TakeAll](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-dunder-call.md#takeall)
+- [TakeAllTruthy](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-dunder-call.md#takealltruthy)
+- [TakeFirst](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-dunder-call.md#takefirst)
+- [TakeFirstTruthy](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-dunder-call.md#takefirsttruthy)
+- [Time](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#time)
+- [ToFloat](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#tofloat)
+- [UnicodeEscape](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md#unicodeescape)
+
+## Built-in Processor Collections
+- [Compose](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-collections.md#compose)
+- [MapCompose](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-collections.md#mapcompose)
+
+## Table of Contents
+
+- [What's a Processor?](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/whats-a-processor.md)
+- [What's Context?](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/whats-context.md)
+- [Subclassing Processor and ProcessorCollection](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/subclassing-processor-and-processorcollection.md)
+- [Built-in ProcessorCollection Subclasses](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-collections.md)
+- [Built-in value-by-value processors](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-process-value.md)
+- [Built-in iterable processors](https://github.com/nicholas-mischke/scrapy-processors/blob/main/README/built-in-dunder-call.md)
+
+
+<!-- # Local Links, work locally and on github, not PyPI -->
+<!-- ## Built-in Processors
 - [CharWhitespacePadding](README/built-in-process-value.md#charwhitespacepadding)
 - [Coalesce](README/built-in-dunder-call.md#coalesce)
 - [Date](README/built-in-process-value.md#date)
@@ -55,17 +98,12 @@ $ pip install scrapy-processors
 
 ## Table of Contents
 
-[What's a Processor?](README/whats-a-processor.md)
-
-[What's Context?](README/whats-context.md)
-
-[Subclassing Processor and ProcessorCollection](README/subclassing-processor-and-processorcollection.md)
-
-[Built-in ProcessorCollection Subclasses](README/built-in-collections.md)
-
-[Built-in value-by-value processors](README/built-in-process-value.md)
-
-[Built-in iterable processors](README/built-in-dunder-call.md)
+- [What's a Processor?](README/whats-a-processor.md)
+- [What's Context?](README/whats-context.md)
+- [Subclassing Processor and ProcessorCollection](README/subclassing-processor-and-processorcollection.md)
+- [Built-in ProcessorCollection Subclasses](README/built-in-collections.md)
+- [Built-in value-by-value processors](README/built-in-process-value.md)
+- [Built-in iterable processors](README/built-in-dunder-call.md) -->
 
 ## Opening an Issue
 
