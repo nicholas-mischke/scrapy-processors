@@ -103,10 +103,6 @@ class TakeAllTruthy(Processor):
     - default (Any): The default list to return when no truthy values exist. Defaults to an empty list.
         Defaults to None.
 
-    Additional Context:
-    -------------------
-    None
-
     Returns:
     -------
     List[Any]: A list of all truthy values.
@@ -134,13 +130,45 @@ class TakeAllTruthy(Processor):
 
         exclude = tuple() if exclude == "Don't exclude any falsey values" else exclude
         truthy = [
-            v for v in values
+            v
+            for v in values
             if is_truthy(v, falsey_values, empty_iterables_are_falsey, *exclude)
         ]
 
         if len(truthy) == 0:
             return default
         return truthy
+
+
+class TakeFirst(Processor):
+    """
+    Nearly identical to itemloaders.processors.TakeFirst Processor.
+    Difference being it's now contextually aware, and allows for a default value.
+
+    Default Context:
+    ----------------
+    - exclude (Tuple[Any, ...]): Values to exclude from returning, even if first.
+    - default (Any): The default value to return if no values are found.
+
+    Returns:
+    -------
+    Any: The first value in the list, or the default value if no values are found.
+
+    Example:
+    --------
+    >>> processor = TakeFirst()
+    >>> processor(['apple', 'banana', 'cherry'])
+    'apple'
+    """
+
+    exclude: Tuple[Any, ...] = (None, "")
+    default: Any = None
+
+    def __call__(self, values, **loader_context):
+        for value in values:
+            if value not in loader_context["exclude"]:
+                return value
+        return loader_context["default"]
 
 
 class TakeFirstTruthy(Processor):
@@ -157,10 +185,6 @@ class TakeFirstTruthy(Processor):
         Defaults to "Don't exclude any falsey values".
     - default (Any): The default list to return when no truthy values exist. Defaults to an empty list.
         Defaults to None.
-
-    Additional Context:
-    -------------------
-    None
 
     Returns:
     -------
@@ -202,10 +226,6 @@ class Coalesce(Processor):
     ----------------
     - default (Any): The value to return if all values are `None`. Defaults to `None`.
 
-    Additional Context:
-    -------------------
-    None
-
     Returns:
     -------
     Any: The first non-None value.
@@ -237,10 +257,6 @@ class Join(Processor):
     ----------------
     - separator (str): The separator to use when joining values. Defaults to a space (" ").
 
-    Additional Context:
-    -------------------
-    None
-
     Returns:
     -------
     str: The joined string.
@@ -261,14 +277,6 @@ class Join(Processor):
 class Flatten(Processor):
     """
     Flatten an iterable of iterables into a single iterable.
-
-    Default Context:
-    ----------------
-    None
-
-    Additional Context:
-    -------------------
-    None
 
     Example:
     --------

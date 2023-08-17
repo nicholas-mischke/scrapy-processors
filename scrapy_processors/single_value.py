@@ -154,6 +154,8 @@ class NormalizeWhitespace(Processor):
     ...
     >>> processor.process_value('$ 100')
     '$100'
+    >>> processor(['    For the low, low price of $ 1,000,000 !!!'])
+    ['For the low, low price of $1,000,000!!!']
 
     Notes:
     ------
@@ -208,6 +210,7 @@ class NormalizeWhitespace(Processor):
     strip_chars_add: Set[str] = set()
     strip_chars_ignore: Set[str] = set()
 
+    # Not used in the logic of the processor, but here for documentation.
     other_chars: Set[str] = {
         "*",  # Asterisk
         "&",  # Ampersand
@@ -666,7 +669,7 @@ class NormalizeNumericString(Processor):
 
 class PriceParser(Processor):
     """
-    Processor that takes a string representing a price and returns a price_parser.Price class.
+    Processor that takes a string representing a price and returns a price_parser.Price object.
 
     Description:
     ------------
@@ -728,7 +731,7 @@ class ToFloat(Processor):
     - decimal_places (Optional[int]): The number of decimal places to round the result to.
         If not provided, the result will not be rounded.
 
-    Additional Loader Context:
+    Additional Context:
     --------------------------
     - decimal_separator (Optional[str]): The decimal separator to use when parsing the price.
         If not provided, the decimal separator will be guessed by the price_parser library.
@@ -783,7 +786,7 @@ class DateTimeExtraordinaire(Processor):
     ----------------
     - output_tz (pytz.BaseTzInfo): The timezone to convert the datetime object to. Default is pytz.UTC.
 
-    Additional Loader Context:
+    Additional Context:
     --------------------------
     - date_formats (Optional[List[str]]): A list of format strings using directives as given
     - languages (Optional[List[str]]): A list of language codes, e.g. ['en', 'es', 'zh-Hant'].
@@ -1031,7 +1034,7 @@ class PhoneNumbers(Processor):
     - num_format (phonenumbers.PhoneNumberFormat): The format that the phone number should be returned in.
         Default is E.164. Other options are INTERNATIONAL, NATIONAL, and RFC3966.
 
-    Additional Loader Context:
+    Additional Context:
     --------------------------
     - leniency (phonenumbers.Leniency): The leniency to use when matching phone numbers.
         Default is phonenumbers.Leniency.VALID.

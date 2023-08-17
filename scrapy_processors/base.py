@@ -304,7 +304,7 @@ class ProcessorMeta(MetaMixin):
     ...
     >>>    default_context = {"arg1": 10, "arg2": 20, "arg3": 30}
     ...
-    >>>    def __init__(self, arg1, arg2, arg3, **kwargs):
+    >>>    def __init__(self, arg1=10, arg2=20, arg3=30, **kwargs):
     >>>        \"""
     >>>        This method takes *args and **kwargs.
     >>>        args in turned into a dict with keys being the parameter names and values being the arguments.
@@ -333,7 +333,7 @@ class ProcessorMeta(MetaMixin):
     >>>        ...
     ...
     >>>    @decorator
-    >>>    def __call__(self, values, **loader_context):
+    >>>    def __call__(self, values, loader_context=None, **_loader_context):
     >>>        \"""
     >>>        Signature Validation:
     >>>        --------------------
@@ -454,8 +454,13 @@ class ProcessorCollectionMeta(MetaMixin):
     >>> class MyProcessorCollection(ProcessorCollection):
     >>>    default_context = {"stop_on_none": False, "default": None}
     ...
+    >>>    def __init__(self, *processors, **default_context):
+    >>>       self.processors = list(processors)
+    >>>       self.default_context = deepcopy(self.default_context)
+    >>>       self.default_context.update(default_context)
+    ...
     >>>    @decorator
-    >>>    def __call__(self, values, **loader_context):
+    >>>    def __call__(self, values, loader_context=None, **_loader_context):
     >>>        \"""
     >>>        Signature Validation:
     >>>        --------------------

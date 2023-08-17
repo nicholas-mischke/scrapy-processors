@@ -3,6 +3,7 @@ import pytest
 from scrapy_processors.multi_values import (
     TakeAll,
     TakeAllTruthy,
+    TakeFirst,
     TakeFirstTruthy,
     Coalesce,
     Join,
@@ -24,20 +25,24 @@ class TestTakeAllTruthy:
     @pytest.mark.parametrize(
         "input_values, expected_output",
         [
-            (
-                [True, 123, "abc", [1, 2, 3]],
-                [True, 123, "abc", [1, 2, 3]]
-            ),
-            (
-                [None, False, "", [], 0],
-                []
-            ),
-            (
-                [0, "", False, 7, [], None, "empty"],
-                [7, "empty"]
-            ),
+            ([True, 123, "abc", [1, 2, 3]], [True, 123, "abc", [1, 2, 3]]),
+            ([None, False, "", [], 0], []),
+            ([0, "", False, 7, [], None, "empty"], [7, "empty"]),
             ([], []),
         ],
+    )
+    def test(self, processor, input_values, expected_output):
+        assert processor(input_values) == expected_output
+
+
+class TestTakeFirst:
+    @pytest.fixture
+    def processor(self):
+        return TakeFirst()
+
+    @pytest.mark.parametrize(
+        "input_values, expected_output",
+        [([1, 2, 3], 1), ("apple", "apple"), ([None, "", 10], 10)],
     )
     def test(self, processor, input_values, expected_output):
         assert processor(input_values) == expected_output

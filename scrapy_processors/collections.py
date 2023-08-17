@@ -29,7 +29,7 @@ class Compose(ProcessorCollection):
         ...     def process_value(self, value, **context):
         ...         return value ** 3
 
-        >>> compose = Compose(CubeProcessor(), sum)
+        >>> compose = Compose(sum, CubeProcessor())
         >>> compose([1, 2, 3, 4, 5])
         225
 
@@ -61,7 +61,7 @@ class Compose(ProcessorCollection):
     default: Any = None
 
     def __call__(self, values, **loader_context) -> Any:
-        stop_on_none, default = self.unpack_context(**loader_context)
+        stop_on_none, default, *_ = self.unpack_context(**loader_context)
 
         for processor in self.wrapped_processors:
             if values is None and stop_on_none:
