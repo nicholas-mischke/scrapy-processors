@@ -31,6 +31,7 @@ from scrapy_processors.single_value import (
 from scrapy_processors.multi_values import (
     TakeAll,
     TakeAllTruthy,
+    TakeFirst,
     TakeFirstTruthy,
     Coalesce,
     Join,

@@ -1,7 +1,7 @@
 
 [tool.poetry]
 name = "scrapy-processors"
-version = "2.0.1"
+version = "2.0.2"
 description = "Provides processors for the itemloaders package, commonly used with scrapy."
 authors = ["Nicholas Mischke <nmischkework@proton.me>"]
 license = "MIT"
