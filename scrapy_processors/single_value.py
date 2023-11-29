@@ -9,7 +9,18 @@ Processor class.
 # Standard Library Imports
 from collections import defaultdict
 from datetime import datetime, date, time
-from typing import Any, Optional, Mapping, Iterable, List, Union, Set
+from typing import (
+    Any,
+    Optional,
+    Mapping,
+    Iterable,
+    List,
+    Union,
+    Set,
+    Tuple,
+    Dict,
+    Callable,
+)
 from urllib.parse import urlparse
 import re
 
@@ -397,7 +408,11 @@ class StripQuotes(Processor):
         ticks, ticks_add, ticks_ignore = context[3:6]
         ignore = context[6]
 
-        quotes, quotes_add, quotes_ignore = set(quotes), set(quotes_add), set(quotes_ignore)
+        quotes, quotes_add, quotes_ignore = (
+            set(quotes),
+            set(quotes_add),
+            set(quotes_ignore),
+        )
         ticks, ticks_add, ticks_ignore = set(ticks), set(ticks_add), set(ticks_ignore)
         ignore = set(ignore)
 
@@ -711,9 +726,17 @@ class PriceParser(Processor):
     https://pypi.org/project/price-parser/
     """
 
+    return_attrs: Optional[Union[str, Tuple[str, ...]]] = None
+
     def process_value(self, value: str, **context) -> Price:
         partial = self.wrap_with_context(Price.fromstring, **context)
-        return partial(value)
+        price_obj = partial(value)
+
+        return_attrs = context["return_attrs"]
+        if return_attrs is None:
+            return price_obj
+        if isinstance(return_attrs, str):
+            return getattr(price_obj, return_attrs)
 
 
 class ToFloat(Processor):
@@ -826,10 +849,23 @@ class DateTimeExtraordinaire(Processor):
 
     output_tz: pytz.BaseTzInfo = pytz.UTC
 
+    return_date = False  # If True, returns a date object instead of a datetime object
+    return_time = False  # If True, returns a time object instead of a datetime object
+
     def process_value(self, value, **context) -> datetime:
         parser = self.wrap_with_context(dateparser.parse, **context)
         datetime_obj = parser(value)
-        return datetime_obj.astimezone(context["output_tz"])
+        datetime_obj = datetime_obj.astimezone(context["output_tz"])
+
+        return_date, return_time = context["return_date"], context["return_time"]
+        if return_date and return_time:
+            return {"date": datetime_obj.date(), "time": datetime_obj.time()}
+        elif return_date:
+            return datetime_obj.date()
+        elif return_time:
+            return datetime_obj.time()
+        else:
+            return datetime_obj
 
 
 class DateTime(Processor):
@@ -870,6 +906,9 @@ class DateTime(Processor):
     input_tz: pytz.BaseTzInfo = pytz.timezone(str(get_localzone()))
     output_tz: pytz.BaseTzInfo = pytz.UTC
 
+    return_date = False  # If True, returns a date object instead of a datetime object
+    return_time = False  # If True, returns a time object instead of a datetime object
+
     def process_value(self, value: str, **context) -> datetime:
         format_str, input_tz, output_tz, *_ = self.unpack_context(**context)
 
@@ -880,7 +919,17 @@ class DateTime(Processor):
         datetime_obj = input_tz.localize(datetime_obj)
 
         # Standardize to UTC (or other output timezone)
-        return datetime_obj.astimezone(output_tz)
+        datetime_obj = datetime_obj.astimezone(output_tz)
+
+        return_date, return_time = context["return_date"], context["return_time"]
+        if return_date and return_time:
+            return {"date": datetime_obj.date(), "time": datetime_obj.time()}
+        elif return_date:
+            return datetime_obj.date()
+        elif return_time:
+            return datetime_obj.time()
+        else:
+            return datetime_obj
 
 
 class Date(Processor):
@@ -1007,7 +1056,7 @@ class Emails(Processor):
         _, domain = email.split("@")
         return domain
 
-    def process_value(self, value:str, **context) -> List[str]:
+    def process_value(self, value: str, **context) -> List[str]:
         domain, contains, *_ = self.unpack_context(**context)
         emails = re.findall(r"[a-z0-9\.\-+_]+@[a-z0-9\.\-+_]+\.[a-z]+", value)
 
@@ -1196,3 +1245,21 @@ class SelectJmes(Processor):
         self, value: Union[Mapping[str, Any], List[Mapping[str, Any]]], **context
     ) -> Any:
         return jmespath.search(context["expression"], value)
+
+
+class GetAttr(Processor):
+    attr: str = None
+
+    def process_value(self, value: Any, **context) -> Any:
+        return getattr(value, context["attr"])
+
+
+class CallMethod(Processor):
+    method: str = None
+    args: Tuple[Any] = tuple()
+    kwargs: Dict[str, Any] = dict()
+
+    def process_value(self, value: Any, **context) -> Any:
+        # Allow context to be used as kwargs here as well.
+        args, kwargs = context["args"], context["kwargs"]
+        return getattr(value, context["method"])(*context["args"], **context["kwargs"])

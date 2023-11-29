@@ -41,7 +41,7 @@ from scrapy_processors.multi_values import (
 # Clean scraped strings
 clean_string = MapCompose(
     UnicodeEscape(),
-    RemoveHTMLTags(),
+    # RemoveHTMLTags(),
     str.strip,
     StripQuotes(),
     NormalizeWhitespace(),

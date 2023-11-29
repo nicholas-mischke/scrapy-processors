@@ -79,6 +79,27 @@ class TakeAll:
     def __call__(self, values: Any) -> Any:
         return values
 
+class Identity(TakeAll):
+    """
+    Identical to itemloaders.processors.Identity Processor and the
+    scrapy_processors.TakeAll Processor. While the TakeAll name is more intuitive
+    when using the processor as an output processor, the Identity name is more
+    intuitive when using the processor as an input processor.
+
+    Example:
+    --------
+    >>> processor = TakeAll()
+    >>> processor(['apple', 'banana', 'cherry'])
+    ['apple', 'banana', 'cherry']
+    >>> processor('apple')
+    'apple' # Not ['apple'], but would be if it inherited from scrapy_processors.base.Processor
+
+    Note:
+    ----
+    This processor does not inherit from scrapy_processors.base.Processor.
+    This is because values is wrapped in a list if it's a single value.
+    """
+    ...
 
 class TakeAllTruthy(Processor):
     """
